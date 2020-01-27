@@ -1,0 +1,7 @@
+*/__pycache__/*
+*/*.pyc
+
+pd0-parsing/doc/*
+pd0-parsing/example/*
+pd0-parsing/old/*
+pd0-parsing/pd0/*
