@@ -1,6 +1,6 @@
 # Ensemble.py
 #
-# Represents a Teledyne RDI Doppler Velocity Log (DVL) data ensemble. 
+# Represents a Doppler Velocity Log ensemble. 
 # Adapted from pd0_parser.py, written by Dave Pingal (dpingal@teledyne.com).
 #   2018-11-26  dpingal@teledyne.com    implemented pd0_parser.py
 #   2020-01-27  zduguid@mit.edu         implemented Ensemble.py
@@ -70,6 +70,16 @@ class Ensemble(object):
 
         Pseudocode for decoding a sequence in the Pathfinder Manual on pg 241.
 
+        Key function for unpacking bytes in Python3:
+        (taken from: https://docs.python.org/3/library/struct.html)
+
+            struct.unpack_from(format, buffer, offset=0)
+                Unpack from buffer starting at position offset, according 
+                to the format string format. The result is a tuple even if it 
+                contains exactly one item. The buffer's size in bytes, 
+                starting at position offset, must be at least the size 
+                required by the format, as reflected by calcsize().
+
         Args:
             pd0_bytes: pd0 bytes to be parsed into a DVL ensemble.
 
@@ -82,7 +92,7 @@ class Ensemble(object):
         
         # parse each data type 
         for offset in data['header']['address_offsets']:
-            header_id = struct.unpack('H', buffer(pd0_bytes, offset, 2))[0]
+            header_id = struct.unpack_from('H', pd0_bytes, offset)[0]
             if header_id in self.data_format_ids:
                 key       = self.data_format_ids[header_id][0]
                 parser    = self.data_format_ids[header_id][1]
@@ -92,44 +102,56 @@ class Ensemble(object):
         return(data)
 
 
-    def unpack_bytes(self, pd0_bytes, data_type_format, data_type_offset=0):
+    def unpack_bytes(self, pd0_bytes, format_tuples, offset=0):
         """Unpacks pd0 bytes into data format types.
 
         Args:
             pd0_bytes: bytes to be parsed into specified data types.
-            data_type_format: list of variable format tuples of the form:
-                (var-name <string>, var-type <char>, var-offset <int>).
-            data_type_offset: byte offset to start reading the pd0 bytes.
+            format_tuples: tuple of variable format tuples,
+                where each variable format tuple is of the form:
+                (name <string>, format-string <char>, offset <int>).
+            offset: byte offset to start reading the pd0 bytes.
 
         Returns:
             Dictionary representing the parsed data types, where the keys of
             the dictionary are var-name and the values are the parsed values.
 
-        Notes on common var-types:
-            var-type    C 
-            lfmdlfmd 
+        Note: Information table for common Format Strings: 
+            format  type                size 
+            x       pad-byte 
+            c       char                1
+            b       signed-char         1
+            B       unsigned char       1
+            h       short               2
+            H       unsigned short      2
+            i       int                 4
+            I       unsigned int        4
+            q       long long           8
+            Q       unsigned long long  8 
+        (taken from: https://docs.python.org/3/library/struct.html)
         """
         data = {}
-        for var_format in data_type_format:
-                var_name        = var_format[0]
-                var_type        = var_format[1]
-                var_size        = struct.calcsize(var_format[1])
-                var_offset      = data_type_offset + var_format[2]
-                var_bytes       = buffer(pd0_bytes, var_offset, var_size)
-                data[var_name]  = struct.unpack(var_type, var_bytes)[0]
+        for format_tuple in format_tuples:
+            var_name        = format_tuple[0]
+            var_format      = format_tuple[1]
+            var_size        = struct.calcsize(var_format)
+            var_offset      = offset + format_tuple[2]
+            data[var_name]  = struct.unpack_from(var_format,
+                                                 pd0_bytes,
+                                                 var_offset)[0]
         return(data)
 
 
     def validate_checksum(self, pd0_bytes, offset):
         """Validates the checksum for the ensemble.
         """
-        calc_checksum  = sum([ord(c) for c in pd0_bytes[:offset]]) & 0xFFFF
-        given_checksum = struct.unpack('H', buffer(pd0_bytes, offset, 2))[0]
+        calc_checksum  = sum([c for c in pd0_bytes[:offset]]) & 0xFFFF
+        given_checksum = struct.unpack_from('H', pd0_bytes, offset)[0]
         if calc_checksum != given_checksum:
             raise ChecksumError(calc_checksum, given_checksum)
 
 
-    def parse_beams(self, pd0_bytes, offset, num_cells, num_beams, var_size):
+    def parse_beams(self, pd0_bytes, offset, num_cells, num_beams, var_format):
         """Parses beams of DVL data.
         
         Velocity, correlation mag, echo intensity, and percent good data types
@@ -142,27 +164,27 @@ class Ensemble(object):
             offset: byte offset to start parsing the fixed leader. 
             num_cells: number of depth cells on DVL (user setting).
             num_beams: number of beams on the DVL (fixed at 4).
-            var_size: size of the variable being parsed for each beam. For 
-                example, var_size = 2 for velocity and var_size = 1 for all
-                other beam data types.
+            var_format: Format String for the variable being parsed for each
+                beam. For example var_format = 'h' means type short.
 
         Returns: 
             List of lists where data[i][j] is the value at the i-th depth bin 
             for the j-th beam.
         """
         data = []
-        var_size_int = struct.calcsize(var_size)
+        var_size = struct.calcsize(var_format)
 
         # parse data for each depth cell 
-        for cell in xrange(0, num_cells):
-            cell_start = offset + cell*num_beams*var_size_int
+        for cell in range(0, num_cells):
+            cell_start = offset + cell*num_beams*var_size
             cell_data  = []
 
             # parse data for each beam for a given depth cell 
-            for beam in xrange(0, num_beams):
-                beam_start = cell_start + beam*var_size_int
-                beam_bytes = buffer(pd0_bytes, beam_start, var_size_int)
-                beam_data  = struct.unpack(var_size, beam_bytes)[0]
+            for beam in range(0, num_beams):
+                beam_start = cell_start + beam*var_size
+                beam_data  = struct.unpack_from(var_format, 
+                                                pd0_bytes, 
+                                                beam_start)[0]
                 cell_data.append(beam_data)
             data.append(cell_data)
 
@@ -194,10 +216,10 @@ class Ensemble(object):
         header_id        = 0x7f
         header_data      = self.unpack_bytes(pd0_bytes, header_format)
         num_data_types   = header_data['num_data_types']
-        address_size     = 'H'
-        address_size_int = 2
+        address_format  = 'H'
+        address_size     = 2
         address_start    = 6
-        address_end      = address_start + num_data_types*address_size_int
+        address_end      = address_start + num_data_types*address_size
         address_list     = []
 
         # check that header has the correct ID
@@ -209,9 +231,8 @@ class Ensemble(object):
                  header_id, header_id))
 
         # parse the address offset for each data type 
-        for byte_start in xrange(address_start, address_end, address_size_int):
-            address_bytes = buffer(pd0_bytes, byte_start, address_size_int)
-            address       = struct.unpack_from(address_size, address_bytes)[0]
+        for start in range(address_start, address_end, address_size):
+            address = struct.unpack_from(address_format, pd0_bytes, start)[0]
             address_list.append(address)
 
         header_data['address_offsets'] = address_list

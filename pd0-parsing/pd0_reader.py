@@ -1,14 +1,14 @@
-# pd0_reader.py
-# wrapper around USF PD0 code, reads a TWR pd0 file, parses individual
-# ensembles out ot it
-#   2018-11-26  dpingal@teledyne.com    Initial
-#   TODO        zduguid@mit.edu         TODO
+# TimeSeries.py
+#
+# Represents a time series of Doppler Velocity Log ensembles. 
+#   2020-01-27  zduguid@mit.edu         TODO
 
 
 import glob
 import json
 import os 
 import sys
+import time
 from Ensemble import Ensemble
 
 
@@ -18,16 +18,17 @@ def pd0_read(filename):
     """
     timeseries = init_timeseries_dict()
     pd0_file   = open(filename, 'rb').read()
-    # print(pd0_file)
     ensembles  = 0
-    print('parsing: ', filename)
-    
-    # TODO
-    # for i in range(2):
+
+    print('parsing file: %s' % (filename,))
+    parse_start = time.time()
+
+    # parse ensembles until the end of the pd0 file is reached    
     while len(pd0_file) > 0:
+
         # parse an ensemble from the pd0 file
         ensemble = Ensemble(pd0_file)
-        # ensemble = pd0_parser.parse_ensemble(pd0_file)
+        # ensemble = Ensemble(memoryview(pd0_file))
         
         # chop off the ensemble we just ensemble
         ensemble_len = ensemble.data['header']['num_bytes'] + 2
@@ -46,10 +47,7 @@ def pd0_read(filename):
         ensemble_val = ensemble.data['fixed_leader']['blank_after_transmit']
         timeseries['blank_after_transmit'].append(ensemble_val)
 
-        try:
-            ensemble_val = ensemble.data['bottom_track']
-        except KeyError:
-            ensemble_val = None
+        ensemble_val = ensemble.data['bottom_track']
         timeseries['bottom_track'].append(ensemble_val)
 
         ensemble_val = ensemble.data['correlation']['data']
@@ -103,14 +101,20 @@ def pd0_read(filename):
         ensemble_val = ensemble.data['velocity']['data']
         timeseries['velocity'].append(ensemble_val)
 
+    parse_stop = time.time()
     extension_length = 4
     savename = filename[:-extension_length] + '.json'
-    print('parsing: ', savename, '(ensembles = ', ensembles, ') \n')
+    print('  num ensembles: %d'    % (ensembles))
+    print('  parsing time:  %f'    % (parse_stop-parse_start))
+    print('  saving file:   %s' % (savename))
 
     # save the data 
+    save_start = time.time()
     json.dump(timeseries, open(savename, 'w'), 
                sort_keys=True, indent=2, default=str,
                separators=(',', ': '))  
+    save_stop  = time.time()
+    print('  saving time:   %f \n' % (save_stop-save_start))
 
 
 def init_timeseries_dict():
@@ -146,8 +150,6 @@ def init_timeseries_dict():
 
 
 if __name__ == '__main__': 
-    # TODO add option for combining multiple .pd0 files 
-
     # for filename in sys.argv[1:]:
     #     pd0_read(filename)
 
