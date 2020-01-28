@@ -21,6 +21,15 @@ class Ensemble(object):
         consulted while writing this code. Specific pages of the manual are 
         referenced in the doc-strings of relevant functions.
 
+        The Pathfinder always sends the Least Significant Byte (LSB) first.
+        This corresponds with little-endian byte ordering. As a result, the 
+        less-than symbol (<) is included in the format string so that the 
+        struct module can unpack the bytes properly using the function below:
+
+        struct.unpack_from(format-string, buffer, offset=0)
+        (https://docs.python.org/3/library/struct.html)
+
+
         Args: 
             pd0_bytes: pd0 bytes to be parsed into a DVL ensemble.
 
@@ -55,7 +64,7 @@ class Ensemble(object):
     def data_format_ids(self):
         # type: () -> dict
         return(self._data_format_ids)
-    
+
 
     def parse_ensemble(self, pd0_bytes):
         """Parses an ensemble from pd0 bytes.
@@ -69,16 +78,6 @@ class Ensemble(object):
         6. parse the data type using the Pathfinder byte specification.
 
         Pseudocode for decoding a sequence in the Pathfinder Manual on pg 241.
-
-        Key function for unpacking bytes in Python3:
-        (taken from: https://docs.python.org/3/library/struct.html)
-
-            struct.unpack_from(format, buffer, offset=0)
-                Unpack from buffer starting at position offset, according 
-                to the format string format. The result is a tuple even if it 
-                contains exactly one item. The buffer's size in bytes, 
-                starting at position offset, must be at least the size 
-                required by the format, as reflected by calcsize().
 
         Args:
             pd0_bytes: pd0 bytes to be parsed into a DVL ensemble.
@@ -126,6 +125,8 @@ class Ensemble(object):
             H       unsigned short      2
             i       int                 4
             I       unsigned int        4
+            >i      big-endian int      1
+            <i      little-endian int   1
             q       long long           8
             Q       unsigned long long  8 
         (taken from: https://docs.python.org/3/library/struct.html)
@@ -146,7 +147,7 @@ class Ensemble(object):
         """Validates the checksum for the ensemble.
         """
         calc_checksum  = sum([c for c in pd0_bytes[:offset]]) & 0xFFFF
-        given_checksum = struct.unpack_from('H', pd0_bytes, offset)[0]
+        given_checksum = struct.unpack_from('<H', pd0_bytes, offset)[0]
         if calc_checksum != given_checksum:
             raise ChecksumError(calc_checksum, given_checksum)
 
@@ -209,18 +210,18 @@ class Ensemble(object):
         header_format = (
             ('id',                              'B',     0),
             ('data_source',                     'B',     1),
-            ('num_bytes',                       'H',     2),
+            ('num_bytes',                       '<H',    2),
             ('spare',                           'B',     4),
-            ('num_data_types',                  'B',     5)
+            ('num_data_types',                  'B',     5),
         )
-        header_id        = 0x7f
-        header_data      = self.unpack_bytes(pd0_bytes, header_format)
-        num_data_types   = header_data['num_data_types']
-        address_format  = 'H'
-        address_size     = 2
-        address_start    = 6
-        address_end      = address_start + num_data_types*address_size
-        address_list     = []
+        header_id       = 0x7f
+        header_data     = self.unpack_bytes(pd0_bytes, header_format)
+        num_data_types  = header_data['num_data_types']
+        address_format  = '<H'
+        address_size    = 2
+        address_start   = 6
+        address_end     = address_start + num_data_types*address_size
+        address_list    = []
 
         # check that header has the correct ID
         if (header_data['id']          != header_id or 
@@ -228,7 +229,7 @@ class Ensemble(object):
             raise ValueError('Incorrect Header ID \
                 \n  received: %s %s \n  expected: %s %s' % 
                 (header_data['id'], header_data['data_source'], 
-                 header_id, header_id))
+                 header_id,         header_id))
 
         # parse the address offset for each data type 
         for start in range(address_start, address_end, address_size):
@@ -251,38 +252,38 @@ class Ensemble(object):
             data: dictionary object storing ensemble information.
         """
         fixed_leader_format = (
-            ('id',                              'H',     0),
-            ('cpu_firmware_version',            'B',     2),
-            ('cpu_firmware_revision',           'B',     3),
-            ('system_configuration',            'H',     4),
-            ('simulation_flag',                 'B',     6),
-            ('lag_length',                      'B',     7),
-            ('num_beams',                       'B',     8),
-            ('num_cells',                       'B',     9),
-            ('pings_per_ensemble',              'H',    10),
-            ('depth_cell_length',               'H',    12),
-            ('blank_after_transmit',            'H',    14),
-            ('profiling_mode',                  'B',    16),
-            ('low_correlation_threshold',       'B',    17),
-            ('num_code_repetitions',            'B',    18),
-            ('percent_good_minimum',            'B',    19),
-            ('error_velocity_threshold',        'H',    20),
-            ('minutes',                         'B',    22),
-            ('seconds',                         'B',    23),
-            ('hundredths',                      'B',    24),
-            ('coordinate_transformation',       'B',    25),
-            ('heading_alignment',               'H',    26),
-            ('heading_bias',                    'H',    28),
-            ('sensor_source',                   'B',    30),
-            ('sensor_available',                'B',    31),
-            ('bin_1_distance',                  'H',    32),
-            ('transmit_pulse_length',           'H',    34),
-            ('starting_depth_cell',             'B',    36),
-            ('ending_depth_cell',               'B',    37),
-            ('false_target_threshold',          'B',    38),
-            ('transmit_lag_distance',           'H',    40),
-            ('system_bandwidth',                'H',    50),
-            ('system_serial_number',            'I',    54),
+            ('id',                          '<H',    0),
+            ('cpu_firmware_version',        'B',     2),
+            ('cpu_firmware_revision',       'B',     3),
+            ('system_configuration',        '<H',    4),
+            ('simulation_flag',             'B',     6),
+            ('lag_length',                  'B',     7),
+            ('num_beams',                   'B',     8),
+            ('num_cells',                   'B',     9),
+            ('pings_per_ensemble',          '<H',   10),
+            ('depth_cell_length',           '<H',   12),    # [cm]
+            ('blank_after_transmit',        '<H',   14),    # [cm]
+            ('profiling_mode',              'B',    16),
+            ('low_correlation_threshold',   'B',    17),
+            ('num_code_repetitions',        'B',    18),
+            ('percent_good_minimum',        'B',    19),    # [%]
+            ('error_velocity_threshold',    '<H',   20),    # [mm/s]
+            ('minutes',                     'B',    22),
+            ('seconds',                     'B',    23),
+            ('hundredths',                  'B',    24),
+            ('coordinate_transformation',   'B',    25),
+            ('heading_alignment',           '<h',   26),    # [0.01 deg]
+            ('heading_bias',                '<h',   28),    # [0.01 deg]
+            ('sensor_source',               'B',    30),
+            ('sensor_available',            'B',    31),
+            ('bin_1_distance',              '<H',   32),    # [cm]
+            ('transmit_pulse_length',       '<H',   34),    # [cm]
+            ('starting_depth_cell',         'B',    36),
+            ('ending_depth_cell',           'B',    37),
+            ('false_target_threshold',      'B',    38),
+            ('transmit_lag_distance',       '<H',   40),    # [cm]
+            ('system_bandwidth',            '<H',   50),
+            ('system_serial_number',        '<I',   54),
         )
         return(self.unpack_bytes(pd0_bytes, fixed_leader_format, offset))
 
@@ -299,39 +300,43 @@ class Ensemble(object):
             data: dictionary object storing ensemble information.
         """
         variable_leader_format = (
-            ('id',                              'H',     0),
-            ('ensemble_number',                 'H',     2),
-            ('rtc_year',                        'B',     4),
-            ('rtc_month',                       'B',     5),
-            ('rtc_day',                         'B',     6),
-            ('rtc_hour',                        'B',     7),
-            ('rtc_minute',                      'B',     8),
-            ('rtc_second',                      'B',     9),
-            ('rtc_hundredths',                  'B',    10),
-            ('ensemble_roll_over',              'B',    11),
-            ('bit_result',                      'H',    12),
-            ('speed_of_sound',                  'H',    14),
-            ('depth_of_transducer',             'H',    16),
-            ('heading',                         'H',    18),
-            ('pitch',                           'H',    20),
-            ('roll',                            'H',    22),
-            ('salinity',                        'H',    24),
-            ('temperature',                     'H',    26),
-            ('min_ping_wait_minutes',           'B',    28),
-            ('min_ping_wait_seconds',           'B',    29),
-            ('min_ping_wait_hundredths',        'B',    30),
-            ('heading_standard_deviation',      'B',    31),
-            ('pitch_standard_deviation',        'B',    32),
-            ('roll_standard_deviation',         'B',    33),
-            ('adc_rounded_voltage',             'B',    35),
-            ('pressure',                        'I',    48),
-            ('pressure_variance',               'I',    52),
-            ('spare',                           'I',    56)
+            ('id',                          '<H',    0),
+            ('ensemble_number',             '<H',    2),
+            ('rtc_year',                    'B',     4),
+            ('rtc_month',                   'B',     5),
+            ('rtc_day',                     'B',     6),
+            ('rtc_hour',                    'B',     7),
+            ('rtc_minute',                  'B',     8),
+            ('rtc_second',                  'B',     9),
+            ('rtc_hundredths',              'B',    10),
+            ('ensemble_roll_over',          'B',    11),
+            ('bit_result',                  '<H',   12),
+            ('speed_of_sound',              '<H',   14),    # [m/s]
+            ('depth_of_transducer',         '<H',   16),    # [dm]
+            ('heading',                     '<H',   18),    # [0.01 deg]
+            ('pitch',                       '<h',   20),    # [0.01 deg]
+            ('roll',                        '<h',   22),    # [0.01 deg]
+            ('salinity',                    '<H',   24),    # [ppt]
+            ('temperature',                 '<h',   26),    # [0.01 deg]
+            ('min_ping_wait_minutes',       'B',    28),
+            ('min_ping_wait_seconds',       'B',    29),
+            ('min_ping_wait_hundredths',    'B',    30),
+            ('heading_standard_deviation',  'B',    31),
+            ('pitch_standard_deviation',    'B',    32),    # [0.1 deg]
+            ('roll_standard_deviation',     'B',    33),    # [0.1 deg]
+            ('adc_rounded_voltage',         'B',    35),
+            ('pressure',                    '<I',   48),    # [daPa]
+            ('pressure_variance',           '<I',   52),    # [daPa]
+            ('health_status',               'B',    66),
+            ('leak_a_count',                '<H',   67),
+            ('leak_b_count',                '<H',   69),
+            ('transducer_voltage',          '<H',   71),    # [0.001 Volts]
+            ('transducer_current',          '<H',   73),    # [0.001 Amps]
+            ('transducer_impedance',        '<H',   75),    # [0.001 Ohms]
         )
-        rtc_millenium     = 2000
-        variable_data     = self.unpack_bytes(pd0_bytes, 
-                                              variable_leader_format, 
-                                              offset)
+        rtc_millenium = 2000
+        variable_data = self.unpack_bytes(pd0_bytes, variable_leader_format, 
+                                          offset)
 
         # collect all time information into a single datetime object 
         data['timestamp'] = datetime(
@@ -351,6 +356,8 @@ class Ensemble(object):
 
         The pd0 velocity format is in the Pathfinder Manual on pg 188.
         The velocity size is: 2 + [2 * num_bins * num_cells] bytes.
+        Units of velocity: [mm/s]
+        Bad velocity flag: -32768
 
         Args:
             pd0_bytes: pd0 bytes to be parsed into the velocity type.
@@ -358,9 +365,10 @@ class Ensemble(object):
             data: dictionary object storing ensemble information.
         """
         id_byte_length        = 2
-        velocity_format       = (('id', 'H', 0),)
-        velocity_byte_size    = 'h' # 2 bytes per velocity 
-        velocity_data         = self.unpack_bytes(pd0_bytes, velocity_format, offset)
+        velocity_format       = (('id', '<H', 0),)
+        velocity_byte_size    = '<h'
+        velocity_data         = self.unpack_bytes(pd0_bytes, velocity_format,
+                                                  offset)
         offset               += id_byte_length
         velocity_data['data'] = self.parse_beams(
             pd0_bytes,
@@ -378,6 +386,10 @@ class Ensemble(object):
 
         The pd0 water profiling format is in the Pathfinder Manual on pg 190.
         The water profiling size is: 2 + [num_bins * num_cells] bytes.
+
+        Correlation:    [0,255]
+        Echo Intensity: [0.61 dB per count]
+        Percent Good:   [0, 100]
 
         Args:
             pd0_bytes: pd0 bytes to be parsed into the water profiling type.
@@ -414,20 +426,20 @@ class Ensemble(object):
         """
 
         bottom_track_format = (
-            ('id',                              'H',     0),
-            ('pings_per_ensemble',              'H',     2),        
+            ('id',                              '<H',    0),
+            ('pings_per_ensemble',              '<H',    2),        
             ('min_correlation_mag',             'B',     6),
             ('min_evaluation_amp',              'B',     7),
             ('bottom_track_mode',               'B',     9),
-            ('max_error_velocity',              'H',    10),
-            ('beam1_range',                     'H',    16),
-            ('beam2_range',                     'H',    18),
-            ('beam3_range',                     'H',    20),
-            ('beam4_range',                     'H',    22),
-            ('beam1_velocity',                  'H',    24),
-            ('beam2_velocity',                  'H',    26),
-            ('beam3_velocity',                  'H',    28),
-            ('beam4_velocity',                  'H',    30),
+            ('max_error_velocity',              '<H',   10),    # [mm/s]
+            ('beam1_range',                     '<H',   16),    # [cm]
+            ('beam2_range',                     '<H',   18),    # [cm]
+            ('beam3_range',                     '<H',   20),    # [cm]
+            ('beam4_range',                     '<H',   22),    # [cm]
+            ('beam1_velocity',                  '<h',   24),    # [mm/s]
+            ('beam2_velocity',                  '<h',   26),    # [mm/s]
+            ('beam3_velocity',                  '<h',   28),    # [mm/s]
+            ('beam4_velocity',                  '<h',   30),    # [mm/s]
             ('beam1_correlation',               'B',    32),
             ('beam2_correlation',               'B',    33),
             ('beam3_correlation',               'B',    34),
@@ -440,13 +452,13 @@ class Ensemble(object):
             ('beam2_percent_good',              'B',    41),
             ('beam3_percent_good',              'B',    42),
             ('beam4_percent_good',              'B',    43),
-            ('ref_layer_min',                   'H',    44),
-            ('ref_layer_near',                  'H',    46),
-            ('ref_layer_far',                   'H',    48),
-            ('beam1_ref_layer_velocity',        'H',    50),
-            ('beam2_ref_layer_velocity',        'H',    52),
-            ('beam3_ref_layer_velocity',        'H',    54),
-            ('beam4_ref_layer_velocity',        'H',    56),
+            ('ref_layer_min',                   '<H',   44),    # [dm]
+            ('ref_layer_near',                  '<H',   46),    # [dm]
+            ('ref_layer_far',                   '<H',   48),    # [dm]
+            ('beam1_ref_layer_velocity',        '<h',   50),    # [mm/s]
+            ('beam2_ref_layer_velocity',        '<h',   52),    # [mm/s]
+            ('beam3_ref_layer_velocity',        '<h',   54),    # [mm/s]
+            ('beam4_ref_layer_velocity',        '<h',   56),    # [mm/s]
             ('beam1_ref_layer_correlation',     'B',    58),
             ('beam2_ref_layer_correlation',     'B',    59),
             ('beam3_ref_layer_correlation',     'B',    60),
@@ -459,16 +471,16 @@ class Ensemble(object):
             ('beam2_ref_layer_percent_good',    'B',    67),
             ('beam3_ref_layer_percent_good',    'B',    68),
             ('beam4_ref_layer_percent_good',    'B',    69),
-            ('max_tracking_depth',              'H',    70),
+            ('max_tracking_depth',              '<H',   70),    # [dm]
             ('beam1_rssi',                      'B',    72),
             ('beam2_rssi',                      'B',    73),
             ('beam3_rssi',                      'B',    74),
             ('beam4_rssi',                      'B',    75),
             ('shallow_water_gain',              'B',    76),
-            ('beam1_most_significant_byte',     'B',    77),
-            ('beam2_most_significant_byte',     'B',    78),
-            ('beam3_most_significant_byte',     'B',    79),
-            ('beam4_most_significant_byte',     'B',    80)
+            ('beam1_most_significant_byte',     'B',    77),    # [cm]
+            ('beam2_most_significant_byte',     'B',    78),    # [cm]
+            ('beam3_most_significant_byte',     'B',    79),    # [cm]
+            ('beam4_most_significant_byte',     'B',    80),    # [cm]
             )
         return(self.unpack_bytes(pd0_bytes, bottom_track_format, offset))
 

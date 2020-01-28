@@ -19,8 +19,8 @@ def pd0_read(filename):
     timeseries = init_timeseries_dict()
     pd0_file   = open(filename, 'rb').read()
     ensembles  = 0
-
-    print('parsing file: %s' % (filename,))
+    print('parsing new file')
+    print('  input file:    %s' % (filename,))
     parse_start = time.time()
 
     # parse ensembles until the end of the pd0 file is reached    
@@ -106,7 +106,7 @@ def pd0_read(filename):
     savename = filename[:-extension_length] + '.json'
     print('  num ensembles: %d'    % (ensembles))
     print('  parsing time:  %f'    % (parse_stop-parse_start))
-    print('  saving file:   %s' % (savename))
+    print('  output file:   %s' % (savename))
 
     # save the data 
     save_start = time.time()
