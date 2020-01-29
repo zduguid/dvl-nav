@@ -9,7 +9,7 @@ import json
 import os 
 import sys
 import time
-from Ensemble import Ensemble
+from PathfinderEnsemble import PathfinderEnsemble
 
 
 def pd0_read(filename):
@@ -27,11 +27,11 @@ def pd0_read(filename):
     while len(pd0_file) > 0:
 
         # parse an ensemble from the pd0 file
-        ensemble = Ensemble(pd0_file)
+        ensemble = PathfinderEnsemble(pd0_file)
         # ensemble = Ensemble(memoryview(pd0_file))
         
         # chop off the ensemble we just ensemble
-        ensemble_len = ensemble.data['header']['num_bytes'] + 2
+        ensemble_len = ensemble.num_bytes + 2
         pd0_file     = pd0_file[ensemble_len:]
         ensembles   += 1
 
@@ -41,64 +41,64 @@ def pd0_read(filename):
         ensemble_val = ensemble.data['timestamp']
         timeseries['timestamp'].append(ensemble_val)
 
-        ensemble_val = ensemble.data['fixed_leader']['bin_1_distance']
+        ensemble_val = ensemble.bin_1_distance
         timeseries['bin_1_distance'].append(ensemble_val)
 
-        ensemble_val = ensemble.data['fixed_leader']['blank_after_transmit']
+        ensemble_val = ensemble.blank_after_transmit
         timeseries['blank_after_transmit'].append(ensemble_val)
 
-        ensemble_val = ensemble.data['bottom_track']
-        timeseries['bottom_track'].append(ensemble_val)
+        ensemble_val = ensemble.data['bt_range']
+        timeseries['bt_range'].append(ensemble_val)        
 
-        ensemble_val = ensemble.data['correlation']['data']
+        ensemble_val = ensemble.data['correlation']
         timeseries['correlation'].append(ensemble_val)
 
-        ensemble_val = ensemble.data['fixed_leader']['coordinate_transformation']
+        ensemble_val = ensemble.coordinate_transformation
         timeseries['coordinate_transformation'].append(ensemble_val)
 
-        ensemble_val = ensemble.data['fixed_leader']['depth_cell_length']
+        ensemble_val = ensemble.depth_cell_length
         timeseries['depth_cell_length'].append(ensemble_val)
 
-        ensemble_val = ensemble.data['variable_leader']['depth_of_transducer']
+        ensemble_val = ensemble.data['depth_of_transducer']
         timeseries['depth_of_transducer'].append(ensemble_val)
 
-        ensemble_val = ensemble.data['echo_intensity']['data']
+        ensemble_val = ensemble.data['echo_intensity']
         timeseries['echo_intensity'].append(ensemble_val)
 
-        ensemble_val = ensemble.data['fixed_leader']['ending_depth_cell']
+        ensemble_val = ensemble.ending_depth_cell
         timeseries['ending_depth_cell'].append(ensemble_val)
 
-        ensemble_val = ensemble.data['variable_leader']['heading']
+        ensemble_val = ensemble.data['heading']
         timeseries['heading'].append(ensemble_val)
 
-        ensemble_val = ensemble.data['fixed_leader']['num_beams']
+        ensemble_val = ensemble.num_beams
         timeseries['num_beams'].append(ensemble_val)
 
-        ensemble_val = ensemble.data['fixed_leader']['num_cells']
+        ensemble_val = ensemble.num_cells
         timeseries['num_cells'].append(ensemble_val)
 
-        ensemble_val = ensemble.data['percent_good']['data']
+        ensemble_val = ensemble.data['percent_good']
         timeseries['percent_good'].append(ensemble_val)
 
-        ensemble_val = ensemble.data['variable_leader']['pitch']
+        ensemble_val = ensemble.data['pitch']
         timeseries['pitch'].append(ensemble_val)
 
-        ensemble_val = ensemble.data['variable_leader']['roll']
+        ensemble_val = ensemble.data['roll']
         timeseries['roll'].append(ensemble_val)
 
-        ensemble_val = ensemble.data['variable_leader']['speed_of_sound']
+        ensemble_val = ensemble.data['speed_of_sound']
         timeseries['speed_of_sound'].append(ensemble_val)
 
-        ensemble_val = ensemble.data['fixed_leader']['starting_depth_cell']
+        ensemble_val = ensemble.starting_depth_cell
         timeseries['starting_depth_cell'].append(ensemble_val)
 
-        ensemble_val = ensemble.data['variable_leader']['temperature']
+        ensemble_val = ensemble.data['temperature']
         timeseries['temperature'].append(ensemble_val)
 
-        ensemble_val = ensemble.data['fixed_leader']['transmit_lag_distance']
+        ensemble_val = ensemble.transmit_lag_distance
         timeseries['transmit_lag_distance'].append(ensemble_val)
 
-        ensemble_val = ensemble.data['velocity']['data']
+        ensemble_val = ensemble.data['velocity']
         timeseries['velocity'].append(ensemble_val)
 
     parse_stop = time.time()
@@ -106,15 +106,16 @@ def pd0_read(filename):
     savename = filename[:-extension_length] + '.json'
     print('  num ensembles: %d'    % (ensembles))
     print('  parsing time:  %f'    % (parse_stop-parse_start))
-    print('  output file:   %s' % (savename))
 
     # save the data 
+    # TODO use CSV saving function available to pandas 
     save_start = time.time()
     json.dump(timeseries, open(savename, 'w'), 
                sort_keys=True, indent=2, default=str,
                separators=(',', ': '))  
     save_stop  = time.time()
-    print('  saving time:   %f \n' % (save_stop-save_start))
+    print('  saving time:   %f'    % (save_stop-save_start))
+    print('  output file:   %s \n' % (savename))
 
 
 def init_timeseries_dict():
@@ -126,7 +127,7 @@ def init_timeseries_dict():
     timeseries_fields = ['timestamp',
                          'bin_1_distance',
                          'blank_after_transmit',
-                         'bottom_track',
+                         'bt_range',
                          'correlation',
                          'coordinate_transformation',
                          'depth_cell_length',
