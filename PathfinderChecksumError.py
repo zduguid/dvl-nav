@@ -1,4 +1,4 @@
-class ChecksumError(Exception):
+class PathfinderChecksumError(Exception):
     """Raised when an invalid checksum is found
     """
     def __init__(self, calc_checksum, given_checksum):

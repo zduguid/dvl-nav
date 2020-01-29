@@ -5,12 +5,11 @@
 #   2018-11-26  dpingal@teledyne.com    implemented pd0_parser.py
 #   2020-01-27  zduguid@mit.edu         implemented PathfinderEnsemble.py
 
-import json
-import sys
 import struct
+import sys
 import numpy as np 
 import pandas as pd
-from ChecksumError import ChecksumError
+from PathfinderChecksumError import PathfinderChecksumError
 from datetime import datetime
 
 
@@ -39,10 +38,10 @@ class PathfinderEnsemble(object):
 
         Raises:
             ValueError if header id is incorrect.
-            ChecksumError if an invalid checksum is found.
+            PathfinderChecksumError if an invalid checksum is found.
         """
         # maps byte id with particular data types and data parsers
-        self.data_format_ids = {
+        self._data_id_parsers = {
             0x0000: ('fixed_leader',    self.parse_fixed_leader),
             0x0080: ('variable_leader', self.parse_variable_leader),
             0x0100: ('velocity',        self.parse_velocity),
@@ -51,7 +50,19 @@ class PathfinderEnsemble(object):
             0x0400: ('percent_good',    self.parse_water_profiling_data),
             0x0600: ('bottom_track',    self.parse_bottom_track),
         }
-        self.data = self.parse_ensemble(pd0_bytes)
+        self._df = self.parse_ensemble(pd0_bytes)
+
+
+    @property
+    def df(self):
+        """Gets the pandas data-frame of the ensemble."""
+        return self._df   
+
+
+    @property
+    def data_id_parsers(self):
+        """Gets the dictionary that matches variable types and parsers"""
+        return self._data_id_parsers
 
 
     def parse_ensemble(self, pd0_bytes):
@@ -71,7 +82,7 @@ class PathfinderEnsemble(object):
             pd0_bytes: pd0 bytes to be parsed into a DVL ensemble.
 
         Returns:
-            Dictionary of DVL ensemble data. 
+            pandas DataFrame of DVL ensemble data. 
         """
         # parse header to confirm header ID and validate checksum
         self.parse_header(pd0_bytes)
@@ -84,14 +95,14 @@ class PathfinderEnsemble(object):
         for address in self.address_offsets:
             header_format = 'H'
             header_id = struct.unpack_from(header_format,pd0_bytes,address)[0]
-            if header_id in self.data_format_ids:
-                key       = self.data_format_ids[header_id][0]
-                parser    = self.data_format_ids[header_id][1]
+            if header_id in self.data_id_parsers:
+                key       = self.data_id_parsers[header_id][0]
+                parser    = self.data_id_parsers[header_id][1]
                 data_dict = parser(pd0_bytes, key, address, data_dict)
             else:
                 print('  WARNING: no parser found for header %d' %(header_id,))
 
-        return(data_dict)
+        return(pd.DataFrame(data_dict, index=data_dict['time_index']))
 
 
     def unpack_bytes(self, pd0_bytes, format_tuples, offset=0):
@@ -142,7 +153,7 @@ class PathfinderEnsemble(object):
         calc_checksum  = sum([c for c in pd0_bytes[:self.num_bytes]]) & 0xFFFF
         given_checksum = struct.unpack_from('<H', pd0_bytes, self.num_bytes)[0]
         if calc_checksum != given_checksum:
-            raise ChecksumError(calc_checksum, given_checksum)
+            raise PathfinderChecksumError(calc_checksum, given_checksum)
 
 
     def parse_beams(self, pd0_bytes, offset, num_cells, num_beams, var_format):
@@ -293,7 +304,8 @@ class PathfinderEnsemble(object):
         # fixed leader values are constant throughout the DVL time-series so 
         #   store values as attributes instead of in the data dictionary 
         for key in fixed_leader:
-            setattr(self, key, fixed_leader[key])
+            if key != 'id':
+                setattr(self, key, fixed_leader[key])
 
         # convert units to standard metric values 
         self.depth_cell_length        /= 100  # [cm]       -> [m]
@@ -392,14 +404,14 @@ class PathfinderEnsemble(object):
         
         # collect all time information into a single datetime object 
         rtc_millenium = 2000
-        data_dict['timestamp'] = [pd.to_datetime(datetime(
+        data_dict['time_index'] = pd.DatetimeIndex([datetime(
             variable_leader['rtc_year'] + rtc_millenium,
             variable_leader['rtc_month'],
             variable_leader['rtc_day'],
             variable_leader['rtc_hour'],
             variable_leader['rtc_minute'],
             variable_leader['rtc_second'],
-            variable_leader['rtc_hundredths']))]
+            variable_leader['rtc_hundredths'])])
 
         # return the modified data dictionary 
         return(data_dict)
@@ -409,7 +421,7 @@ class PathfinderEnsemble(object):
         """Parses the velocity data type of the pd0 file.
 
         The pd0 velocity format is in the Pathfinder Manual on pg 188.
-        The velocity size is: 2 + [2 * num_bins * num_cells] bytes.
+        The velocity size is: 2 + [2 * num_beams * num_cells] bytes.
         Units of velocity: [mm/s]
         Bad velocity flag: -32768
 
@@ -435,7 +447,12 @@ class PathfinderEnsemble(object):
         # filter out bad velocity values and convert to SI units 
         velocity[velocity     == bad_velocity]  = np.NaN 
         velocity[velocity     != np.NaN]       /= 1000      # [mm/s] -> [m/s]
-        data_dict['velocity']  = velocity
+
+        # store each velocity value as its own column in the data frame
+        for i in range(self.num_cells):
+            for j in range(self.num_beams):
+                data_dict['vy_bin%d_beam%d'%(i+1,j+1,)] = [velocity[i,j]]
+
         return(data_dict)
 
 
@@ -443,7 +460,7 @@ class PathfinderEnsemble(object):
         """Parses the water profiling data type of the pd0 file.
 
         The pd0 water profiling format is in the Pathfinder Manual on pg 190.
-        The water profiling size is: 2 + [num_bins * num_cells] bytes.
+        The water profiling size is: 2 + [num_beams * num_cells] bytes.
 
         Correlation:    [0, 255]
         Echo Intensity: [0.61 dB per count]
@@ -461,9 +478,19 @@ class PathfinderEnsemble(object):
         profiling_format = 'B'
         profiling_data   = self.unpack_bytes(pd0_bytes, profiling_id, offset)
         offset          += id_byte_length
-        profiling_var    = self.parse_beams(pd0_bytes, offset, self.num_cells,
+        profile          = self.parse_beams(pd0_bytes, offset, self.num_cells,
                                             self.num_beams, profiling_format)
-        data_dict[name]  = profiling_var
+
+        # use two letter short-name to encode the variable type 
+        if   name == 'correlation':     sn = 'cn'
+        elif name == 'echo_intensity':  sn = 'ei'
+        elif name == 'percent_good':    sn = 'pg'
+
+        # store each profiling value as its own column in the data frame
+        for i in range(self.num_cells):
+            for j in range(self.num_beams):
+                data_dict['%s_bin%d_beam%d' % (sn,i+1,j+1)] = [profile[i,j]]
+
         return(data_dict)
 
 
@@ -479,7 +506,7 @@ class PathfinderEnsemble(object):
             offset: byte offset to start parsing the bottom track 
             data_dict: dictionary object storing ensemble information.
         """
-        vel_flag            = -32768
+        bad_velocity        = -32768
         bottom_track_format = (
             ('id',                              '<H',    0),
             ('pings_per_ensemble',              '<H',    2),        
@@ -532,77 +559,55 @@ class PathfinderEnsemble(object):
             ('beam3_receiver_signal_stength',   'B',    74),
             ('beam4_receiver_signal_stength',   'B',    75),
             ('shallow_water_gain',              'B',    76),
-            ('beam1_most_significant_byte',     'B',    77),    # [cm]
-            ('beam2_most_significant_byte',     'B',    78),    # [cm]
-            ('beam3_most_significant_byte',     'B',    79),    # [cm]
-            ('beam4_most_significant_byte',     'B',    80),    # [cm]
+            ('beam1_msb',                       'B',    77),    # [cm]
+            ('beam2_msb',                       'B',    78),    # [cm]
+            ('beam3_msb',                       'B',    79),    # [cm]
+            ('beam4_msb',                       'B',    80),    # [cm]
             )
 
         bottom_track = self.unpack_bytes(pd0_bytes,bottom_track_format,offset)
 
-        # save the bottom track data that is not associated with a beam
+        # save the bottom track data to the data dictionary 
         for key in bottom_track:
-            if key[0:4] != 'beam' and key != 'id':
-                data_dict['bt_' + key] = bottom_track[key]
+            if key != 'id':
+                data_dict['bt_' + key] = [bottom_track[key]]
+
+        # replace bad velocity values with np.NaN
+        velocity_vars = ['bt_beam1_velocity', 
+                         'bt_beam2_velocity',
+                         'bt_beam3_velocity',
+                         'bt_beam4_velocity',
+                         'bt_beam1_ref_layer_velocity',
+                         'bt_beam2_ref_layer_velocity',
+                         'bt_beam3_ref_layer_velocity',
+                         'bt_beam4_ref_layer_velocity']
+
+        for var in velocity_vars:
+            if data_dict[var][0] == bad_velocity: data_dict[var] = [np.NaN]
 
         # convert variables to traditional SI values
-        data_dict['bt_max_error_velocity']  /= 1000 # [mm/s] -> [m/s]
-        data_dict['bt_ref_layer_min']       /= 10   # [dm]   -> [m]
-        data_dict['bt_ref_layer_near']      /= 10   # [dm]   -> [m]
-        data_dict['bt_ref_layer_far']       /= 10   # [dm]   -> [m]
-        data_dict['bt_max_tracking_depth']  /= 10   # [dm]   -> [m]
-
-        # define helper function to avoid highly repeated code 
-        def get_bt_array(parameter, scale_factor=1, flag=None, dtype=float):
-            """Creates a four-beam numpy array for a give parameter.
-
-            Args:
-                parameter: the name of the variable to retrieve for each beam.
-                scale_factor: the factor to convert data to SI units.
-                    i.e. scale_factor = 100: [cm] -> [m]
-                flag: the flag to replace with np.NaN when flag is present.
-                    i.e. flag = -32768 for velocity data 
-                dtype: data type for the resulting numpy array.
-
-            Returns: 
-                numpy array with shape (4,) for the given parameter
-            """
-            bt_array = np.array([bottom_track['beam1_' + parameter],
-                                 bottom_track['beam2_' + parameter],
-                                 bottom_track['beam3_' + parameter],
-                                 bottom_track['beam4_' + parameter]],
-                                 dtype=dtype)
-            if not flag:
-                bt_array /= scale_factor    
-            else:
-                bt_array[bt_array == flag]      = np.NaN   
-                bt_array[bt_array != np.NaN]   /= scale_factor
-            return(bt_array)
-
-
-        data_dict['bt_range']          = get_bt_array('range',100)
-        data_dict['bt_velocity']       = get_bt_array('velocity',1000,vel_flag)
-        data_dict['bt_correlation']    = get_bt_array('correlation')
-        data_dict['bt_echo_intensity'] = get_bt_array('echo_intensity')
-        data_dict['bt_percent_good']   = get_bt_array('percent_good')
-
-        data_dict['bt_ref_layer_velocity'] = \
-            get_bt_array('ref_layer_velocity', 1000, vel_flag)
-        
-        data_dict['bt_ref_layer_correlation'] = \
-            get_bt_array('ref_layer_correlation')
-        
-        data_dict['bt_ref_layer_echo_intensity'] = \
-            get_bt_array('ref_layer_echo_intensity')
-        
-        data_dict['bt_ref_layer_percent_good']   = \
-            get_bt_array('ref_layer_percent_good')       
-
-        data_dict['bt_receiver_signal_stength'] = \
-            get_bt_array('receiver_signal_stength')
-
-        data_dict['bt_most_significant_byte']   = \
-            get_bt_array('most_significant_byte') 
+        data_dict['bt_ref_layer_min'][0]            /= 10   # [dm]   -> [m]
+        data_dict['bt_ref_layer_near'][0]           /= 10   # [dm]   -> [m]
+        data_dict['bt_ref_layer_far'][0]            /= 10   # [dm]   -> [m]
+        data_dict['bt_max_tracking_depth'][0]       /= 10   # [dm]   -> [m]
+        data_dict['bt_beam1_range'][0]              /= 100  # [cm]   -> [m]
+        data_dict['bt_beam2_range'][0]              /= 100  # [cm]   -> [m]
+        data_dict['bt_beam3_range'][0]              /= 100  # [cm]   -> [m]
+        data_dict['bt_beam4_range'][0]              /= 100  # [cm]   -> [m]
+        data_dict['bt_beam1_msb'][0]                /= 100  # [cm]   -> [m]
+        data_dict['bt_beam2_msb'][0]                /= 100  # [cm]   -> [m]
+        data_dict['bt_beam3_msb'][0]                /= 100  # [cm]   -> [m]
+        data_dict['bt_beam4_msb'][0]                /= 100  # [cm]   -> [m]
+        data_dict['bt_beam1_velocity'][0]           /= 1000 # [mm/s] -> [m/s]
+        data_dict['bt_beam2_velocity'][0]           /= 1000 # [mm/s] -> [m/s]
+        data_dict['bt_beam3_velocity'][0]           /= 1000 # [mm/s] -> [m/s]
+        data_dict['bt_beam4_velocity'][0]           /= 1000 # [mm/s] -> [m/s]
+        data_dict['bt_max_error_velocity'][0]       /= 1000 # [mm/s] -> [m/s]
+        data_dict['bt_beam1_ref_layer_velocity'][0] /= 1000 # [mm/s] -> [m/s]
+        data_dict['bt_beam2_ref_layer_velocity'][0] /= 1000 # [mm/s] -> [m/s]
+        data_dict['bt_beam3_ref_layer_velocity'][0] /= 1000 # [mm/s] -> [m/s]
+        data_dict['bt_beam4_ref_layer_velocity'][0] /= 1000 # [mm/s] -> [m/s]
 
         return(data_dict)
+
 
