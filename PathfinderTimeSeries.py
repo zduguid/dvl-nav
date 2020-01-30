@@ -1,7 +1,7 @@
 # PathfinderTimeSeries.py
 #
 # TODO
-#   2020-01-29  zduguid@mit.edu         TODO
+#   2020-01-29  zduguid@mit.edu         initial implementation
 
 import struct
 import sys
@@ -30,19 +30,34 @@ class PathfinderTimeSeries(object):
             if key[0] != '_':
                 setattr(self, key, ensemble_attributes[key])
 
-        # initialize the time series ensemble
-        self._df = ensemble.df
+        # initialize the data_arrays
+        self._ensemble_list = [ensemble.data_array]
+
+
+    @property
+    def ensemble_list(self):
+        return self._ensemble_list
 
 
     @property
     def df(self):
-        """Gets the pandas data-frame of the ensemble."""
         return self._df
 
 
     def add_ensemble(self, ensemble):
         """TODO 
         """
-        self._df.append(ensemble.df)
-        # self._df = pd.concat([self.df, ensemble.df], axis=0)
+        self._ensemble_list.append(ensemble.data_array)
+
+
+    def to_dataframe(self):
+        """TODO
+        """
+        ts     = np.array(self.ensemble_list)
+        cols   = self.label_list
+        t      = ts[:,0] # first column of the times series 
+        index  = pd.DatetimeIndex([datetime.fromtimestamp(val) for val in t])
+
+        # save to data-frame 
+        self._df  = pd.DataFrame(data=ts, index=index, columns=cols)
 

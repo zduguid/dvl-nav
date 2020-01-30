@@ -44,26 +44,58 @@ class PathfinderEnsemble(object):
         self._data_id_parsers = {
             0x0000: ('fixed_leader',    self.parse_fixed_leader),
             0x0080: ('variable_leader', self.parse_variable_leader),
-            0x0100: ('velocity',        self.parse_velocity),
+            0x0100: ('velocity',        self.parse_water_profiling_data),
             0x0200: ('correlation',     self.parse_water_profiling_data),
             0x0300: ('echo_intensity',  self.parse_water_profiling_data),
             0x0400: ('percent_good',    self.parse_water_profiling_data),
             0x0600: ('bottom_track',    self.parse_bottom_track),
         }
-        self._df = self.parse_ensemble(pd0_bytes)
+
+        self._data_short_names = {
+            'fixed_leader'      : 'fl', 
+            'variable_leader'   : 'vl',
+            'velocity'          : 'vy',
+            'correlation'       : 'cn',
+            'echo_intensity'    : 'ei',
+            'percent_good'      : 'pg',
+            'bottom_track'      : 'bt'
+        }
+
+        self.bad_velocity = -32768
+
+        # parse array given pd0 bytes
+        self.parse_ensemble(pd0_bytes)
 
 
     @property
-    def df(self):
-        """Gets the pandas data-frame of the ensemble."""
-        return self._df   
+    def data_array(self):
+        return self._data_array
 
-
+       
     @property
     def data_id_parsers(self):
-        """Gets the dictionary that matches variable types and parsers"""
         return self._data_id_parsers
 
+
+    @property
+    def data_short_names(self):
+        return self._data_short_names
+
+
+    @property
+    def data_type_sizes(self):
+        return self._data_type_sizes
+
+    
+    @property
+    def data_type_offsets(self):
+        return self._data_type_offsets
+
+    
+    @property
+    def ensemble_size(self):
+        return self._ensemble_size
+    
 
     def parse_ensemble(self, pd0_bytes):
         """Parses an ensemble from pd0 bytes.
@@ -80,29 +112,21 @@ class PathfinderEnsemble(object):
 
         Args:
             pd0_bytes: pd0 bytes to be parsed into a DVL ensemble.
-
-        Returns:
-            pandas DataFrame of DVL ensemble data. 
         """
         # parse header to confirm header ID and validate checksum
         self.parse_header(pd0_bytes)
         self.validate_checksum(pd0_bytes)
-
-        # collect ensemble data in a dictionary 
-        data_dict = {}
 
         # parse each data type 
         for address in self.address_offsets:
             header_format = 'H'
             header_id = struct.unpack_from(header_format,pd0_bytes,address)[0]
             if header_id in self.data_id_parsers:
-                key       = self.data_id_parsers[header_id][0]
+                name      = self.data_id_parsers[header_id][0]
                 parser    = self.data_id_parsers[header_id][1]
-                data_dict = parser(pd0_bytes, key, address, data_dict)
+                data_dict = parser(pd0_bytes, name, address)
             else:
                 print('  WARNING: no parser found for header %d' %(header_id,))
-
-        return(pd.DataFrame(data_dict, index=data_dict['time_index']))
 
 
     def unpack_bytes(self, pd0_bytes, format_tuples, offset=0):
@@ -156,7 +180,8 @@ class PathfinderEnsemble(object):
             raise PathfinderChecksumError(calc_checksum, given_checksum)
 
 
-    def parse_beams(self, pd0_bytes, offset, num_cells, num_beams, var_format):
+    def parse_beams(self, pd0_bytes, offset, num_cells, num_beams, var_format, 
+        var_name):
         """Parses beams of DVL data.
         
         Velocity, correlation mag, echo intensity, and percent good data types
@@ -171,18 +196,16 @@ class PathfinderEnsemble(object):
             num_beams: number of beams on the DVL (fixed at 4).
             var_format: Format String for the variable being parsed for each
                 beam. For example var_format = 'h' means type short.
-
-        Returns: 
-            List of lists where data[i][j] is the value at the i-th depth bin 
-            for the j-th beam.
+            var_name: name of the variable being parsed (i.e. 'velocity')
         """
         data     = np.empty([0, num_beams])
         var_size = struct.calcsize(var_format)
+        var_sn   = self.data_short_names[var_name]
+        count    = 0
 
         # parse data for each depth cell 
         for cell in range(0, num_cells):
             cell_start = offset + cell*num_beams*var_size
-            cell_data  = []
 
             # parse data for each beam for a given depth cell 
             for beam in range(0, num_beams):
@@ -190,10 +213,25 @@ class PathfinderEnsemble(object):
                 beam_data  = struct.unpack_from(var_format, 
                                                 pd0_bytes, 
                                                 beam_start)[0]
-                cell_data.append(beam_data)
-            data = np.append(data, np.array([cell_data]), axis=0)
 
-        return(data)
+                # compute labels and array index 
+                label  = var_sn + '_cell%d_beam%d' % (cell+1,beam+1)
+                index  = self.data_type_offsets[var_name] + count
+                count += 1
+
+                # filter out bad velocities and adjust units if necessary
+                if var_name == 'velocity':
+                    if beam_data == self.bad_velocity: 
+                        value = np.NaN
+                    else: 
+                        value = beam_data / 1000  # [mm/s] -> [m/s]
+                else:
+                    value = beam_data             # others keep their units 
+
+                # store information in arrays and dict 
+                self.data_array[index]  = value 
+                self.label_dict[label]  = index
+                self.label_list.append(label)
 
 
     def parse_header(self, pd0_bytes):
@@ -210,11 +248,11 @@ class PathfinderEnsemble(object):
             ValueError if header id is incorrect.
         """
         header_format = (
-            ('id',                              'B',     0),
-            ('data_source',                     'B',     1),
-            ('num_bytes',                       '<H',    2),
-            ('spare',                           'B',     4),
-            ('num_data_types',                  'B',     5),
+            ('id',              'B',    0),
+            ('data_source',     'B',    1),
+            ('num_bytes',       '<H',   2),
+            ('spare',           'B',    4),
+            ('num_data_types',  'B',    5),
         )
         header_flag = 0x7f
         header_dict = self.unpack_bytes(pd0_bytes, header_format)
@@ -250,10 +288,11 @@ class PathfinderEnsemble(object):
         sizes = self.address_offsets.copy()
         sizes.insert(0,0)
         sizes.append(self.num_bytes)
-        self.var_sizes = [sizes[i+1] - sizes[i] for i in range(len(sizes)-1)]
+        self.var_byte_sizes = \
+            [sizes[i+1] - sizes[i] for i in range(len(sizes)-1)]
 
 
-    def parse_fixed_leader(self, pd0_bytes, name, offset, data_dict):
+    def parse_fixed_leader(self, pd0_bytes, name, offset):
         """Parses the fixed leader data type of the pd0 file.
 
         The pd0 fixed leader format is in the Pathfinder Manual on pg 174.
@@ -263,7 +302,6 @@ class PathfinderEnsemble(object):
             pd0_bytes: pd0 bytes to be parsed into the fixed leader data type.
             name: the name of the data type (name = 'fixed_leader')
             offset: byte offset to start parsing the fixed leader. 
-            data_dict: dictionary object storing ensemble information.
         """
         fixed_leader_format = (
             ('id',                          '<H',    0),
@@ -302,7 +340,7 @@ class PathfinderEnsemble(object):
         fixed_leader = self.unpack_bytes(pd0_bytes,fixed_leader_format,offset)
         
         # fixed leader values are constant throughout the DVL time-series so 
-        #   store values as attributes instead of in the data dictionary 
+        # store values as attributes instead of the ensemble
         for key in fixed_leader:
             if key != 'id':
                 setattr(self, key, fixed_leader[key])
@@ -318,8 +356,9 @@ class PathfinderEnsemble(object):
         self.transmit_lag_distance    /= 100  # [cm]       -> [m]
 
         # compute expected sizes of each data type 
-        # (according to the Pathfinder manual pg 171)
-        self.var_sizes_expected = [
+        #   + according to the Pathfinder manual pg 171
+        #   + compare this against self.var_byte_sizes
+        self.var_byte_sizes_expected = [
             6 + 2*self.num_data_types,          # header
             58,                                 # fixed leader
             77,                                 # variable leader
@@ -330,11 +369,35 @@ class PathfinderEnsemble(object):
             81                                  # bottom track
         ]            
 
-        # return the unmodified dictionary
-        return(data_dict)
+        # compute size of data types 
+        #   + variable leader and bottom track types are of fixed size
+        beam_size = self.num_beams*self.num_cells
+        self._data_type_sizes = (
+            ('time',                    1),
+            ('variable_leader',        26),
+            ('velocity',        beam_size),
+            ('correlation',     beam_size),
+            ('echo_intensity',  beam_size),
+            ('percent_good',    beam_size),
+            ('bottom_track',           54)
+        )
 
+        # initialize an empty ensemble array 
+        self._ensemble_size     = sum([var[1] for var in self.data_type_sizes])
+        self._data_type_offsets = {self.data_type_sizes[0][0] : 0}
+        self._data_array        = np.empty(self.ensemble_size)
+        self.label_dict         = {}
+        self.label_list         = ['time']
 
-    def parse_variable_leader(self, pd0_bytes, name, offset, data_dict):
+        # compute list of array offsets for filling ensemble array
+        for i in range(1,len(self.data_type_sizes)):
+            name        = self.data_type_sizes[i][0]
+            prev_offset = self.data_type_offsets[self.data_type_sizes[i-1][0]]
+            prev_size   = self.data_type_sizes[i-1][1]
+            self._data_type_offsets[name] = prev_offset + prev_size
+        
+
+    def parse_variable_leader(self, pd0_bytes, name, offset):
         """Parses the variable leader data type of the pd0 file.
 
         The pd0 variable leader format is in the Pathfinder Manual on pg 180.
@@ -344,7 +407,6 @@ class PathfinderEnsemble(object):
             pd0_bytes: pd0 bytes to be parsed into the variable leader type.
             name: the name of the data type (name = 'variable_leader')
             offset: byte offset to start parsing the variable leader 
-            data_dict: dictionary object storing ensemble information.
         """
         variable_leader_format = (
             ('id',                          '<H',    0),
@@ -374,8 +436,8 @@ class PathfinderEnsemble(object):
             ('adc_rounded_voltage',         'B',    35),
             ('pressure',                    '<I',   48),    # [daPa]
             ('pressure_variance',           '<I',   52),    # [daPa]
-            # # these bytes are currently not being included in the pd0 file 
-            # #     + see 'self.var_sizes' and 'self.var_sizes_expected'
+            # # these bytes are currently not being included in the pd0 file, 
+            # # see 'self.var_byte_sizes' and 'self.var_byte_sizes_expected'
             # ('health_status',               'B',    66),
             # ('leak_a_count',                '<H',   67),
             # ('leak_b_count',                '<H',   69),
@@ -383,85 +445,62 @@ class PathfinderEnsemble(object):
             # ('transducer_current',          '<H',   73),    # [0.001 Amps]
             # ('transducer_impedance',        '<H',   75),    # [0.001 Ohms]
         )
-        variable_leader = self.unpack_bytes(pd0_bytes, variable_leader_format, 
+        variable_leader = self.unpack_bytes(pd0_bytes, 
+                                            variable_leader_format, 
                                             offset)
-
-        # save variable leader values to the data dictionary
-        for key in variable_leader:
-            if key != 'id':
-                data_dict[key] = [variable_leader[key]]
-
-        # convert units to standard metric values 
-        data_dict['depth_of_transducer'][0]      /= 10   # [dm]       -> [m]
-        data_dict['heading'][0]                  /= 100  # [0.01 deg] -> [deg]
-        data_dict['pitch'][0]                    /= 100  # [0.01 deg] -> [deg]
-        data_dict['roll'][0]                     /= 100  # [0.01 deg] -> [deg]
-        data_dict['temperature'][0]              /= 100  # [0.01 C]   -> [C]
-        data_dict['pitch_standard_deviation'][0] /= 10   # [0.1 deg]  -> [deg]
-        data_dict['roll_standard_deviation'][0]  /= 10   # [0.1 deg]  -> [deg]
-        data_dict['pressure'][0]                 *= 10   # [daPa]     -> [Pa]
-        data_dict['pressure_variance'][0]        *= 10   # [daPa]     -> [Pa]
         
+        # store parsed values in the data array 
+        for i in range(1,len(variable_leader_format)):
+
+            # compute array index (subtract 1 because we do not include id)
+            label       = variable_leader_format[i][0]
+            value       = variable_leader[label]
+            array_index = i - 1 + self.data_type_offsets[name]
+
+            # store information in arrays and dict 
+            self.data_array[array_index]  = value 
+            self.label_dict[label]        = array_index
+            self.label_list.append(label)
+
+        # convert units to standard SI units 
+        scale_vars = (
+            ('depth_of_transducer',         10),    # [dm]      -> [m]
+            ('heading',                     100),   # [0.01 deg -> [deg]
+            ('pitch',                       100),   # [0.01 deg -> [deg]
+            ('roll',                        100),   # [0.01 deg -> [deg]
+            ('temperature',                 100),   # [0.01 C]  -> [C]
+            ('pitch_standard_deviation',    10),    # [0.1 deg] -> [deg]
+            ('roll_standard_deviation',     10),    # [0.1 deg] -> [deg]
+            ('pressure',                    0.1),   # [daPa]    -> [Pa]
+            ('pressure_variance',           0.1)    # [daPa]    -> [Pa]
+        )
+
+        for (var, scale) in scale_vars:
+            self.data_array[self.label_dict[var]] /= scale
+
         # collect all time information into a single datetime object 
-        rtc_millenium = 2000
-        data_dict['time_index'] = pd.DatetimeIndex([datetime(
+        rtc_millenium = 2000 
+        timestamp = datetime(
             variable_leader['rtc_year'] + rtc_millenium,
             variable_leader['rtc_month'],
             variable_leader['rtc_day'],
             variable_leader['rtc_hour'],
             variable_leader['rtc_minute'],
             variable_leader['rtc_second'],
-            variable_leader['rtc_hundredths'])])
+            variable_leader['rtc_hundredths']).timestamp()
 
-        # return the modified data dictionary 
-        return(data_dict)
-
-
-    def parse_velocity(self, pd0_bytes, name, offset, data_dict):
-        """Parses the velocity data type of the pd0 file.
-
-        The pd0 velocity format is in the Pathfinder Manual on pg 188.
-        The velocity size is: 2 + [2 * num_beams * num_cells] bytes.
-        Units of velocity: [mm/s]
-        Bad velocity flag: -32768
-
-        velocity[i]    -> velocity at the i-th bin for all beams
-        velocity[i,j]  -> velocity at the i-th bin for the j-th beam
-        velocity[:,j]  -> velocity at all bins for the j-th beam
-
-        Args:
-            pd0_bytes: pd0 bytes to be parsed into the velocity type.
-            name: the name of the data type (name = 'velocity')
-            offset: byte offset to start parsing the velocity 
-            data_dict: dictionary object storing ensemble information.
-        """
-        id_byte_length  = 2
-        bad_velocity    = -32768
-        velocity_id     = (('id', '<H', 0),)
-        velocity_format = '<h'
-        velocity_data   = self.unpack_bytes(pd0_bytes, velocity_id, offset)
-        offset         += id_byte_length
-        velocity        = self.parse_beams(pd0_bytes, offset, self.num_cells,
-                                           self.num_beams, velocity_format)
-
-        # filter out bad velocity values and convert to SI units 
-        velocity[velocity     == bad_velocity]  = np.NaN 
-        velocity[velocity     != np.NaN]       /= 1000      # [mm/s] -> [m/s]
-
-        # store each velocity value as its own column in the data frame
-        for i in range(self.num_cells):
-            for j in range(self.num_beams):
-                data_dict['vy_bin%d_beam%d'%(i+1,j+1,)] = [velocity[i,j]]
-
-        return(data_dict)
+        # first slot in the array is reserved for timestamp 
+        self.data_array[0] = timestamp
 
 
-    def parse_water_profiling_data(self, pd0_bytes, name, offset, data_dict):
+    def parse_water_profiling_data(self, pd0_bytes, name, offset):
         """Parses the water profiling data type of the pd0 file.
 
-        The pd0 water profiling format is in the Pathfinder Manual on pg 190.
-        The water profiling size is: 2 + [num_beams * num_cells] bytes.
+        The water profiling format is in the Pathfinder Manual on pg 188 & 190.
+        The velocity size is: 2 + [2 * num_beams * num_cells] bytes.
+        The other profiling sizes are: 2 + [num_beams * num_cells] bytes.
 
+        Velocity:       [mm/s]
         Correlation:    [0, 255]
         Echo Intensity: [0.61 dB per count]
         Percent Good:   [0, 100]
@@ -469,32 +508,19 @@ class PathfinderEnsemble(object):
         Args:
             pd0_bytes: pd0 bytes to be parsed into the water profiling type.
             name: the name of the data type 
-                (name = ['correlation', 'echo_intensity', 'percent_good'])
             offset: byte offset to start parsing the water profiling 
-            data_dict: dictionary object storing ensemble information.
         """
         id_byte_length   = 2
-        profiling_id     = (('id', '<H', 0),)
-        profiling_format = 'B'
-        profiling_data   = self.unpack_bytes(pd0_bytes, profiling_id, offset)
-        offset          += id_byte_length
-        profile          = self.parse_beams(pd0_bytes, offset, self.num_cells,
-                                            self.num_beams, profiling_format)
-
-        # use two letter short-name to encode the variable type 
-        if   name == 'correlation':     sn = 'cn'
-        elif name == 'echo_intensity':  sn = 'ei'
-        elif name == 'percent_good':    sn = 'pg'
-
-        # store each profiling value as its own column in the data frame
-        for i in range(self.num_cells):
-            for j in range(self.num_beams):
-                data_dict['%s_bin%d_beam%d' % (sn,i+1,j+1)] = [profile[i,j]]
-
-        return(data_dict)
+        if name == 'velocity': 
+            profiling_format = '<h'
+        else:                
+            profiling_format = 'B'
+        offset   += id_byte_length
+        profile   = self.parse_beams(pd0_bytes, offset, self.num_cells,
+                                     self.num_beams, profiling_format, name)
 
 
-    def parse_bottom_track(self, pd0_bytes, name, offset, data_dict):
+    def parse_bottom_track(self, pd0_bytes, name, offset):
         """Parses the bottom track data type of the pd0 file.
 
         The pd0 bottom track format is in the Pathfinder Manual on pg 194.
@@ -504,9 +530,7 @@ class PathfinderEnsemble(object):
             pd0_bytes: pd0 bytes to be parsed into the bottom track type.
             name: the name of the data type (name = 'bottom_track')
             offset: byte offset to start parsing the bottom track 
-            data_dict: dictionary object storing ensemble information.
         """
-        bad_velocity        = -32768
         bottom_track_format = (
             ('id',                              '<H',    0),
             ('pings_per_ensemble',              '<H',    2),        
@@ -567,10 +591,18 @@ class PathfinderEnsemble(object):
 
         bottom_track = self.unpack_bytes(pd0_bytes,bottom_track_format,offset)
 
-        # save the bottom track data to the data dictionary 
-        for key in bottom_track:
-            if key != 'id':
-                data_dict['bt_' + key] = [bottom_track[key]]
+        # store parsed values in the data array 
+        for i in range(1,len(bottom_track_format)):
+
+            # compute array index (subtract 1 because we do not include id)
+            label       = bottom_track_format[i][0]
+            value       = bottom_track[label]
+            array_index = i - 1 + self.data_type_offsets[name]
+
+            # store information in arrays and dict 
+            self.data_array[array_index]  = value 
+            self.label_dict['bt_'+label]  = array_index
+            self.label_list.append('bt_'+label)
 
         # replace bad velocity values with np.NaN
         velocity_vars = ['bt_beam1_velocity', 
@@ -582,32 +614,37 @@ class PathfinderEnsemble(object):
                          'bt_beam3_ref_layer_velocity',
                          'bt_beam4_ref_layer_velocity']
 
+        # filter out bad velocity values 
         for var in velocity_vars:
-            if data_dict[var][0] == bad_velocity: data_dict[var] = [np.NaN]
+            if self.data_array[self.label_dict[var]] == self.bad_velocity:
+                self.data_array[self.label_dict[var]] = np.NaN
 
-        # convert variables to traditional SI values
-        data_dict['bt_ref_layer_min'][0]            /= 10   # [dm]   -> [m]
-        data_dict['bt_ref_layer_near'][0]           /= 10   # [dm]   -> [m]
-        data_dict['bt_ref_layer_far'][0]            /= 10   # [dm]   -> [m]
-        data_dict['bt_max_tracking_depth'][0]       /= 10   # [dm]   -> [m]
-        data_dict['bt_beam1_range'][0]              /= 100  # [cm]   -> [m]
-        data_dict['bt_beam2_range'][0]              /= 100  # [cm]   -> [m]
-        data_dict['bt_beam3_range'][0]              /= 100  # [cm]   -> [m]
-        data_dict['bt_beam4_range'][0]              /= 100  # [cm]   -> [m]
-        data_dict['bt_beam1_msb'][0]                /= 100  # [cm]   -> [m]
-        data_dict['bt_beam2_msb'][0]                /= 100  # [cm]   -> [m]
-        data_dict['bt_beam3_msb'][0]                /= 100  # [cm]   -> [m]
-        data_dict['bt_beam4_msb'][0]                /= 100  # [cm]   -> [m]
-        data_dict['bt_beam1_velocity'][0]           /= 1000 # [mm/s] -> [m/s]
-        data_dict['bt_beam2_velocity'][0]           /= 1000 # [mm/s] -> [m/s]
-        data_dict['bt_beam3_velocity'][0]           /= 1000 # [mm/s] -> [m/s]
-        data_dict['bt_beam4_velocity'][0]           /= 1000 # [mm/s] -> [m/s]
-        data_dict['bt_max_error_velocity'][0]       /= 1000 # [mm/s] -> [m/s]
-        data_dict['bt_beam1_ref_layer_velocity'][0] /= 1000 # [mm/s] -> [m/s]
-        data_dict['bt_beam2_ref_layer_velocity'][0] /= 1000 # [mm/s] -> [m/s]
-        data_dict['bt_beam3_ref_layer_velocity'][0] /= 1000 # [mm/s] -> [m/s]
-        data_dict['bt_beam4_ref_layer_velocity'][0] /= 1000 # [mm/s] -> [m/s]
+        # convert units to standard SI units 
+        scale_vars = (
+            ('bt_ref_layer_min',            10),   # [dm]   -> [m]
+            ('bt_ref_layer_near',           10),   # [dm]   -> [m]
+            ('bt_ref_layer_far',            10),   # [dm]   -> [m]
+            ('bt_max_tracking_depth',       10),   # [dm]   -> [m]
+            ('bt_beam1_range',              100),  # [cm]   -> [m]
+            ('bt_beam2_range',              100),  # [cm]   -> [m]
+            ('bt_beam3_range',              100),  # [cm]   -> [m]
+            ('bt_beam4_range',              100),  # [cm]   -> [m]
+            ('bt_beam1_msb',                100),  # [cm]   -> [m]
+            ('bt_beam2_msb',                100),  # [cm]   -> [m]
+            ('bt_beam3_msb',                100),  # [cm]   -> [m]
+            ('bt_beam4_msb',                100),  # [cm]   -> [m]
+            ('bt_beam1_velocity',           1000), # [mm/s] -> [m/s]
+            ('bt_beam2_velocity',           1000), # [mm/s] -> [m/s]
+            ('bt_beam3_velocity',           1000), # [mm/s] -> [m/s]
+            ('bt_beam4_velocity',           1000), # [mm/s] -> [m/s]
+            ('bt_max_error_velocity',       1000), # [mm/s] -> [m/s]
+            ('bt_beam1_ref_layer_velocity', 1000), # [mm/s] -> [m/s]
+            ('bt_beam2_ref_layer_velocity', 1000), # [mm/s] -> [m/s]
+            ('bt_beam3_ref_layer_velocity', 1000), # [mm/s] -> [m/s]
+            ('bt_beam4_ref_layer_velocity', 1000), # [mm/s] -> [m/s]
+        )
 
-        return(data_dict)
-
+        # scale values in the data array accordingly 
+        for (var, scale) in scale_vars:
+            self.data_array[self.label_dict[var]] /= scale
 

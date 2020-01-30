@@ -1,11 +1,8 @@
 # pd0_reader.py
 #
 # TODO
-#   2020-01-27  zduguid@mit.edu         Initial pd0_reader.py implementation 
+#   2020-01-27  zduguid@mit.edu         initial implementation 
 
-# TODO
-# import cProfile
-# import re
 
 import glob
 import os
@@ -18,7 +15,6 @@ from PathfinderTimeSeries import PathfinderTimeSeries
 
 def pd0_reader(filepath, save=True):
     """TODO 
-    TODO
     """
     pd0_file = open(filepath, 'rb').read()
     count = 0
@@ -45,6 +41,9 @@ def pd0_reader(filepath, save=True):
         pd0_file     = pd0_file[ensemble_len:]
         count       += 1
 
+    # convert to data-frame once all ensembles are collected
+    time_series.to_dataframe()
+    
     # parsing completed 
     parse_stop = time.time()
     print('    # ensembles: %d'    % (count))
@@ -60,6 +59,7 @@ def pd0_reader(filepath, save=True):
         savename = savedir + filename + saveext
 
         # save the file using pandas 
+        time_series.to_dataframe()
         save_start = time.time()    
         time_series.df.to_csv(savename)
         save_stop  = time.time()
@@ -74,6 +74,4 @@ if __name__ == '__main__':
     #     print(filename)
 
     for filename in sys.argv[1:]:
-        # TODO
-        # cProfile.run('pd0_reader(filename)')
         pd0_reader(filename)  
