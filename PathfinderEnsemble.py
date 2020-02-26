@@ -52,16 +52,19 @@ class PathfinderEnsemble(object):
         }
 
         self._data_short_names = {
-            'fixed_leader'      : 'fl', 
-            'variable_leader'   : 'vl',
-            'velocity'          : 'vy',
-            'correlation'       : 'cn',
-            'echo_intensity'    : 'ei',
-            'percent_good'      : 'pg',
-            'bottom_track'      : 'bt'
+            'fixed_leader'      : 'fld', 
+            'variable_leader'   : 'vld',
+            'velocity'          : 'vel',
+            'correlation'       : 'cor',
+            'echo_intensity'    : 'ech',
+            'percent_good'      : 'per',
+            'bottom_track'      : 'btm',
+            'derived'           : 'der'
         }
 
-        self.bad_velocity = -32768
+        self.num_beams    = 4       # number of DVL beams is fixed 
+        self.bad_velocity = -32768  # value that represents invalid velocity 
+        self.bad_bt_range = 0       # value that represents invalid range
 
         # parse array given pd0 bytes
         self.parse_ensemble(pd0_bytes)
@@ -230,7 +233,7 @@ class PathfinderEnsemble(object):
 
                 # store information in arrays and dict 
                 self.data_array[index]  = value 
-                self.label_dict[label]  = index
+                self.data_lookup[label] = index
                 self.label_list.append(label)
 
 
@@ -310,7 +313,7 @@ class PathfinderEnsemble(object):
             ('system_configuration',        '<H',    4),
             ('simulation_flag',             'B',     6),
             ('lag_length',                  'B',     7),
-            ('num_beams',                   'B',     8),
+            ('num_velocity_beams',          'B',     8),
             ('num_cells',                   'B',     9),
             ('pings_per_ensemble',          '<H',   10),
             ('depth_cell_length',           '<H',   12),    # [cm]
@@ -374,6 +377,7 @@ class PathfinderEnsemble(object):
         beam_size = self.num_beams*self.num_cells
         self._data_type_sizes = (
             ('time',                    1),
+          # ('derived',                 X), TODO
             ('variable_leader',        26),
             ('velocity',        beam_size),
             ('correlation',     beam_size),
@@ -386,7 +390,7 @@ class PathfinderEnsemble(object):
         self._ensemble_size     = sum([var[1] for var in self.data_type_sizes])
         self._data_type_offsets = {self.data_type_sizes[0][0] : 0}
         self._data_array        = np.empty(self.ensemble_size)
-        self.label_dict         = {}
+        self.data_lookup        = {}
         self.label_list         = ['time']
 
         # compute list of array offsets for filling ensemble array
@@ -459,7 +463,7 @@ class PathfinderEnsemble(object):
 
             # store information in arrays and dict 
             self.data_array[array_index]  = value 
-            self.label_dict[label]        = array_index
+            self.data_lookup[label]       = array_index
             self.label_list.append(label)
 
         # convert units to standard SI units 
@@ -476,7 +480,7 @@ class PathfinderEnsemble(object):
         )
 
         for (var, scale) in scale_vars:
-            self.data_array[self.label_dict[var]] /= scale
+            self.data_array[self.data_lookup[var]] /= scale
 
         # collect all time information into a single datetime object 
         rtc_millenium = 2000 
@@ -511,13 +515,11 @@ class PathfinderEnsemble(object):
             offset: byte offset to start parsing the water profiling 
         """
         id_byte_length   = 2
-        if name == 'velocity': 
-            profiling_format = '<h'
-        else:                
-            profiling_format = 'B'
-        offset   += id_byte_length
-        profile   = self.parse_beams(pd0_bytes, offset, self.num_cells,
-                                     self.num_beams, profiling_format, name)
+        if name == 'velocity': profiling_format = '<h'
+        else:                  profiling_format = 'B'
+        offset  += id_byte_length
+        profile  = self.parse_beams(pd0_bytes, offset, self.num_cells,
+                                    self.num_beams, profiling_format, name)
 
 
     def parse_bottom_track(self, pd0_bytes, name, offset):
@@ -578,10 +580,10 @@ class PathfinderEnsemble(object):
             ('beam3_ref_layer_percent_good',    'B',    68),
             ('beam4_ref_layer_percent_good',    'B',    69),
             ('max_tracking_depth',              '<H',   70),    # [dm]
-            ('beam1_receiver_signal_stength',   'B',    72),
-            ('beam2_receiver_signal_stength',   'B',    73),
-            ('beam3_receiver_signal_stength',   'B',    74),
-            ('beam4_receiver_signal_stength',   'B',    75),
+            ('beam1_rssi',                      'B',    72),
+            ('beam2_rssi',                      'B',    73),
+            ('beam3_rssi',                      'B',    74),
+            ('beam4_rssi',                      'B',    75),
             ('shallow_water_gain',              'B',    76),
             ('beam1_msb',                       'B',    77),    # [cm]
             ('beam2_msb',                       'B',    78),    # [cm]
@@ -590,6 +592,7 @@ class PathfinderEnsemble(object):
             )
 
         bottom_track = self.unpack_bytes(pd0_bytes,bottom_track_format,offset)
+        var_sn = self.data_short_names[name]
 
         # store parsed values in the data array 
         for i in range(1,len(bottom_track_format)):
@@ -600,51 +603,62 @@ class PathfinderEnsemble(object):
             array_index = i - 1 + self.data_type_offsets[name]
 
             # store information in arrays and dict 
+            var_fn = var_sn + '_' + label
             self.data_array[array_index]  = value 
-            self.label_dict['bt_'+label]  = array_index
-            self.label_list.append('bt_'+label)
+            self.data_lookup[var_fn]  = array_index
+            self.label_list.append(var_fn)
 
         # replace bad velocity values with np.NaN
-        velocity_vars = ['bt_beam1_velocity', 
-                         'bt_beam2_velocity',
-                         'bt_beam3_velocity',
-                         'bt_beam4_velocity',
-                         'bt_beam1_ref_layer_velocity',
-                         'bt_beam2_ref_layer_velocity',
-                         'bt_beam3_ref_layer_velocity',
-                         'bt_beam4_ref_layer_velocity']
-
+        velocity_vars = [var_sn + '_beam1_velocity', 
+                         var_sn + '_beam2_velocity',
+                         var_sn + '_beam3_velocity',
+                         var_sn + '_beam4_velocity',
+                         var_sn + '_beam1_ref_layer_velocity',
+                         var_sn + '_beam2_ref_layer_velocity',
+                         var_sn + '_beam3_ref_layer_velocity',
+                         var_sn + '_beam4_ref_layer_velocity']
+                         
         # filter out bad velocity values 
         for var in velocity_vars:
-            if self.data_array[self.label_dict[var]] == self.bad_velocity:
-                self.data_array[self.label_dict[var]] = np.NaN
+            if self.data_array[self.data_lookup[var]] == self.bad_velocity:
+                self.data_array[self.data_lookup[var]] = np.NaN
 
+        # replace bad range values  with np.NaN
+        range_vars = [var_sn + '_beam1_range',
+                      var_sn + '_beam2_range',
+                      var_sn + '_beam3_range',
+                      var_sn + '_beam4_range']
+        # filter out bad range values 
+        for var in range_vars:
+            if self.data_array[self.data_lookup[var]] == self.bad_bt_range:
+                self.data_array[self.data_lookup[var]] = np.NaN
+        
         # convert units to standard SI units 
         scale_vars = (
-            ('bt_ref_layer_min',            10),   # [dm]   -> [m]
-            ('bt_ref_layer_near',           10),   # [dm]   -> [m]
-            ('bt_ref_layer_far',            10),   # [dm]   -> [m]
-            ('bt_max_tracking_depth',       10),   # [dm]   -> [m]
-            ('bt_beam1_range',              100),  # [cm]   -> [m]
-            ('bt_beam2_range',              100),  # [cm]   -> [m]
-            ('bt_beam3_range',              100),  # [cm]   -> [m]
-            ('bt_beam4_range',              100),  # [cm]   -> [m]
-            ('bt_beam1_msb',                100),  # [cm]   -> [m]
-            ('bt_beam2_msb',                100),  # [cm]   -> [m]
-            ('bt_beam3_msb',                100),  # [cm]   -> [m]
-            ('bt_beam4_msb',                100),  # [cm]   -> [m]
-            ('bt_beam1_velocity',           1000), # [mm/s] -> [m/s]
-            ('bt_beam2_velocity',           1000), # [mm/s] -> [m/s]
-            ('bt_beam3_velocity',           1000), # [mm/s] -> [m/s]
-            ('bt_beam4_velocity',           1000), # [mm/s] -> [m/s]
-            ('bt_max_error_velocity',       1000), # [mm/s] -> [m/s]
-            ('bt_beam1_ref_layer_velocity', 1000), # [mm/s] -> [m/s]
-            ('bt_beam2_ref_layer_velocity', 1000), # [mm/s] -> [m/s]
-            ('bt_beam3_ref_layer_velocity', 1000), # [mm/s] -> [m/s]
-            ('bt_beam4_ref_layer_velocity', 1000), # [mm/s] -> [m/s]
+            (var_sn + '_ref_layer_min',            10),   # [dm]   -> [m]
+            (var_sn + '_ref_layer_near',           10),   # [dm]   -> [m]
+            (var_sn + '_ref_layer_far',            10),   # [dm]   -> [m]
+            (var_sn + '_max_tracking_depth',       10),   # [dm]   -> [m]
+            (var_sn + '_beam1_range',              100),  # [cm]   -> [m]
+            (var_sn + '_beam2_range',              100),  # [cm]   -> [m]
+            (var_sn + '_beam3_range',              100),  # [cm]   -> [m]
+            (var_sn + '_beam4_range',              100),  # [cm]   -> [m]
+            (var_sn + '_beam1_msb',                100),  # [cm]   -> [m]
+            (var_sn + '_beam2_msb',                100),  # [cm]   -> [m]
+            (var_sn + '_beam3_msb',                100),  # [cm]   -> [m]
+            (var_sn + '_beam4_msb',                100),  # [cm]   -> [m]
+            (var_sn + '_beam1_velocity',           1000), # [mm/s] -> [m/s]
+            (var_sn + '_beam2_velocity',           1000), # [mm/s] -> [m/s]
+            (var_sn + '_beam3_velocity',           1000), # [mm/s] -> [m/s]
+            (var_sn + '_beam4_velocity',           1000), # [mm/s] -> [m/s]
+            (var_sn + '_max_error_velocity',       1000), # [mm/s] -> [m/s]
+            (var_sn + '_beam1_ref_layer_velocity', 1000), # [mm/s] -> [m/s]
+            (var_sn + '_beam2_ref_layer_velocity', 1000), # [mm/s] -> [m/s]
+            (var_sn + '_beam3_ref_layer_velocity', 1000), # [mm/s] -> [m/s]
+            (var_sn + '_beam4_ref_layer_velocity', 1000), # [mm/s] -> [m/s]
         )
 
         # scale values in the data array accordingly 
         for (var, scale) in scale_vars:
-            self.data_array[self.label_dict[var]] /= scale
+            self.data_array[self.data_lookup[var]] /= scale
 

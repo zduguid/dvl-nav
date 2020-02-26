@@ -1,8 +1,9 @@
 # files
-commit_updates.md
 *.pyc
+.nbgrader.log
 
 # folders
-__pycache__/*
-pd0-parsed/*
-pd0-raw/*
+.ipynb_checkpoints/
+__pycache__/
+pd0-parsed/
+pd0-raw/

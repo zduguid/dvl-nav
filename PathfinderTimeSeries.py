@@ -21,7 +21,7 @@ class PathfinderTimeSeries(object):
         result, upon construction of a new time series object, the fixed leader
         values are extracted from the first ensemble received. The fixed leader
         values of all subsequent ensembles are ignored because they are
-        assumed to be the same as the first ensemble. 
+
         """
         # add fixed leader attributes of the first ensemble to the time series
         #   + attributes that start with an underscore are not transferred

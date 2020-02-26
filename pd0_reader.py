@@ -15,6 +15,7 @@ from PathfinderTimeSeries import PathfinderTimeSeries
 
 def pd0_reader(filepath, save=True):
     """TODO 
+    TODO returns time series
     """
     pd0_file = open(filepath, 'rb').read()
     count = 0
@@ -65,6 +66,8 @@ def pd0_reader(filepath, save=True):
         save_stop  = time.time()
         print('    saving time: %f'    % (save_stop - save_start))
         print('    output file: %s \n' % (savename))
+
+    return(time_series)
 
 
 if __name__ == '__main__': 
