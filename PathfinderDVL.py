@@ -1,0 +1,470 @@
+# PathfinderDVL.py
+#
+# TODO
+#   2020-05-05 zduguid@mit.edu         initial implementation
+
+class PathfinderDVL(object):
+    def __init__(self):
+        """Parent class for Pathfinder DVL data 
+
+        Used to define Pathfinder variables that are constant between
+        different Pathfinder DVL objects. 
+        """
+        # constants for unit conversion 
+        self.CM_TO_M = 1/100 # [cm] -> [m]
+        self.MM_TO_M = 1/1000 # [mm] -> [m]
+        self.HUNDRETH_TO_DEG = 1/100 # [0.01 deg] -> [deg]
+
+        # constants for the Pathfinder instrument 
+        self.HEADER_FLAG  = 0x7f    # flag to indicate start of header
+        self.HEADER_BYTES = 6       # number of bytes before address offsets
+        self.NUM_BEAMS    = 4       # number of DVL beams is fixed 
+        self.NUM_BINS     = 40      # specify number of bins (or cells)
+        self.BAD_VELOCITY = -32768  # value that represents invalid velocity 
+        self.BAD_BT_RANGE = 0       # value that represents invalid range
+        # TODO convert [0,255] -> 0.61dB (bottom-track RSSI)
+
+        # map from each variable group name to three letter abbreviation 
+        self._data_abbreviations = {
+            'fixed_leader'      : 'fld', 
+            'variable_leader'   : 'vld',
+            'derived'           : 'der',
+            'velocity'          : 'vel',
+            'correlation'       : 'cor',
+            'echo_intensity'    : 'ech',
+            'percent_good'      : 'per',
+            'bottom_track'      : 'btm',
+        }
+
+        # TODO add derived variables here 
+        #   - OKAY to add and edit the variables in this list 
+        self._derived = (
+            #TODO
+        )
+
+        # tuple of variables that are automatically reported by Pathfinder
+        #   - header variables are used for parsing the rest of the ensemble
+        #   - DO NOT edit these variables 
+        self._header = (
+            ('id',                              'B',    0),
+            ('data_source',                     'B',    1),
+            ('num_bytes',                       '<H',   2),
+            ('spare',                           'B',    4),
+            ('num_data_types',                  'B',    5),
+        )
+
+        # tuple of variables that are automatically reported by Pathfinder
+        #   - "fixed leader" means that values are fixed during mission
+        #   - the units of the raw values are shown in comments
+        #   - the values are converted to standard metric units after unpacking
+        #   - DO NOT edit these variables 
+        self._fixed_leader = (
+            ('id',                              '<H',    0),
+            ('cpu_firmware_version',            'B',     2),
+            ('cpu_firmware_revision',           'B',     3),
+            ('system_configuration',            '<H',    4),
+            ('simulation_flag',                 'B',     6),
+            ('lag_length',                      'B',     7),
+            ('num_beams',                       'B',     8),
+            ('num_bins',                        'B',     9),
+            ('pings_per_ensemble',              '<H',   10),
+            ('depth_cell_length',               '<H',   12),    # [cm]
+            ('blanking_distance ',              '<H',   14),    # [cm]
+            ('profiling_mode',                  'B',    16),
+            ('low_correlation_threshold',       'B',    17),
+            ('num_code_repetitions',            'B',    18),
+            ('percent_good_minimum',            'B',    19),
+            ('error_velocity_threshold',        '<H',   20),    # [mm/s]
+            ('minutes',                         'B',    22),
+            ('seconds',                         'B',    23),
+            ('hundredths',                      'B',    24),
+            ('coordinate_transformation',       'B',    25),
+            ('heading_alignment',               '<h',   26),    # [0.01 deg]
+            ('heading_bias',                    '<h',   28),    # [0.01 deg]
+            ('sensor_source',                   'B',    30),
+            ('sensor_available',                'B',    31),
+            ('bin0_distance',                   '<H',   32),    # [cm]
+            ('transmit_pulse_length',           '<H',   34),    # [cm]
+            ('starting_depth_cell',             'B',    36),
+            ('ending_depth_cell',               'B',    37),
+            ('false_target_threshold',          'B',    38),
+            ('transmit_lag_distance',           '<H',   40),    # [cm]
+            ('system_bandwidth',                '<H',   50),
+            ('system_serial_number',            '<I',   54),
+        )
+
+        # down-select most useful variables from fixed leader variable list
+        self._fixed_leader_vars_short = (
+            'system_configuration',
+            'num_beams',
+            'num_bins', 
+            'pings_per_ensemble',
+            'depth_cell_length',
+            'blanking_distance',
+            'low_correlation_threshold',
+            'percent_good_minimum',
+            'error_velocity_threshold',
+            'coordinate_transformation',
+            'heading_alignment',
+            'heading_bias',
+            'sensor_source',
+            'bin0_distance',
+            'transmit_pulse_length',
+        )
+
+        # tuple of variables that are automatically reported by Pathfinder
+        #   - "variable leader" means the values are dynamic during the mission
+        #   - the units of the raw values are shown in comments
+        #   - the values are converted to standard metric units after unpacking
+        #   - DO NOT edit these variables 
+        self._variable_leader = (
+            ('id',                              '<H',    0),
+            ('ensemble_number',                 '<H',    2),
+            ('rtc_year',                        'B',     4),
+            ('rtc_month',                       'B',     5),
+            ('rtc_day',                         'B',     6),
+            ('rtc_hour',                        'B',     7),
+            ('rtc_minute',                      'B',     8),
+            ('rtc_second',                      'B',     9),
+            ('rtc_hundredths',                  'B',    10),
+            ('ensemble_roll_over',              'B',    11),
+            ('bit_result',                      '<H',   12),
+            ('speed_of_sound',                  '<H',   14),    # [m/s]
+            ('depth_of_transducer',             '<H',   16),    # [dm]
+            ('heading',                         '<H',   18),    # [0.01 deg]
+            ('pitch',                           '<h',   20),    # [0.01 deg]
+            ('roll',                            '<h',   22),    # [0.01 deg]
+            ('salinity',                        '<H',   24),    # [ppt]
+            ('temperature',                     '<h',   26),    # [0.01 C]
+            ('min_ping_wait_minutes',           'B',    28),
+            ('min_ping_wait_seconds',           'B',    29),
+            ('min_ping_wait_hundredths',        'B',    30),
+            ('heading_standard_deviation',      'B',    31),
+            ('pitch_standard_deviation',        'B',    32),    # [0.1 deg]
+            ('roll_standard_deviation',         'B',    33),    # [0.1 deg]
+            ('adc_rounded_voltage',             'B',    35),
+            ('pressure',                        '<I',   48),    # [daPa]
+            ('pressure_variance',               '<I',   52),    # [daPa]
+            ('health_status',                   'B',    66),
+            ('leak_a_count',                    '<H',   67),
+            ('leak_b_count',                    '<H',   69),
+            ('transducer_voltage',              '<H',   71),    # [0.001 Volts]
+            ('transducer_current',              '<H',   73),    # [0.001 Amps]
+            ('transducer_impedance',            '<H',   75),    # [0.001 Ohms]
+        )
+
+        # down-select most useful variables from variable leader variable list
+        self._variable_leader_vars_short = (
+            'ensemble_number',
+            'ensemble_roll_over',
+            'rtc_year',
+            'rtc_month',
+            'rtc_day',
+            'rtc_hour',
+            'rtc_minute',
+            'rtc_second',
+            'rtc_hundredths',
+            'ensemble_roll_over',
+            'bit_result',
+            'speed_of_sound',
+            'depth_of_transducer',
+            'heading',
+            'pitch',
+            'roll',
+            'salinity',
+            'temperature',
+            'min_ping_wait_minutes',
+            'min_ping_wait_seconds',
+            'min_ping_wait_hundredths',
+            'heading_standard_deviation',
+            'pitch_standard_deviation',
+            'roll_standard_deviation',
+            'adc_rounded_voltage',
+            'pressure',
+            'pressure_variance',
+        )
+
+        # tuple of variables reported by Pathfinder in bottom-track mode
+        #   - the units of the raw values are shown in comments
+        #   - the values are converted to standard metric units after unpacking
+        #   - DO NOT edit these variables 
+        self._bottom_track = (
+            ('id',                              '<H',    0),
+            ('pings_per_ensemble',              '<H',    2),        
+            ('min_correlation_mag',             'B',     6),
+            ('min_echo_intensity_amp',          'B',     7),
+            ('bottom_track_mode',               'B',     9),
+            ('max_error_velocity',              '<H',   10),    # [mm/s]
+            ('beam1_range',                     '<H',   16),    # [cm]
+            ('beam2_range',                     '<H',   18),    # [cm]
+            ('beam3_range',                     '<H',   20),    # [cm]
+            ('beam4_range',                     '<H',   22),    # [cm]
+            ('beam1_velocity',                  '<h',   24),    # [mm/s]
+            ('beam2_velocity',                  '<h',   26),    # [mm/s]
+            ('beam3_velocity',                  '<h',   28),    # [mm/s]
+            ('beam4_velocity',                  '<h',   30),    # [mm/s]
+            ('beam1_correlation',               'B',    32),
+            ('beam2_correlation',               'B',    33),
+            ('beam3_correlation',               'B',    34),
+            ('beam4_correlation',               'B',    35),        
+            ('beam1_echo_intensity',            'B',    36),
+            ('beam2_echo_intensity',            'B',    37),
+            ('beam3_echo_intensity',            'B',    38),
+            ('beam4_echo_intensity',            'B',    39),
+            ('beam1_percent_good',              'B',    40),
+            ('beam2_percent_good',              'B',    41),
+            ('beam3_percent_good',              'B',    42),
+            ('beam4_percent_good',              'B',    43),
+            ('ref_layer_min',                   '<H',   44),    # [dm]
+            ('ref_layer_near',                  '<H',   46),    # [dm]
+            ('ref_layer_far',                   '<H',   48),    # [dm]
+            ('beam1_ref_layer_velocity',        '<h',   50),    # [mm/s]
+            ('beam2_ref_layer_velocity',        '<h',   52),    # [mm/s]
+            ('beam3_ref_layer_velocity',        '<h',   54),    # [mm/s]
+            ('beam4_ref_layer_velocity',        '<h',   56),    # [mm/s]
+            ('beam1_ref_layer_correlation',     'B',    58),
+            ('beam2_ref_layer_correlation',     'B',    59),
+            ('beam3_ref_layer_correlation',     'B',    60),
+            ('beam4_ref_layer_correlation',     'B',    61),
+            ('beam1_ref_layer_echo_intensity',  'B',    62),
+            ('beam2_ref_layer_echo_intensity',  'B',    63),
+            ('beam3_ref_layer_echo_intensity',  'B',    64),
+            ('beam4_ref_layer_echo_intensity',  'B',    65),
+            ('beam1_ref_layer_percent_good',    'B',    66),
+            ('beam2_ref_layer_percent_good',    'B',    67),
+            ('beam3_ref_layer_percent_good',    'B',    68),
+            ('beam4_ref_layer_percent_good',    'B',    69),
+            ('max_tracking_depth',              '<H',   70),    # [dm]
+            ('beam1_rssi',                      'B',    72),
+            ('beam2_rssi',                      'B',    73),
+            ('beam3_rssi',                      'B',    74),
+            ('beam4_rssi',                      'B',    75),
+            ('shallow_water_gain',              'B',    76),
+            ('beam1_msb',                       'B',    77),    # [cm]
+            ('beam2_msb',                       'B',    78),    # [cm]
+            ('beam3_msb',                       'B',    79),    # [cm]
+            ('beam4_msb',                       'B',    80),    # [cm]
+        )
+
+        # down-select most useful variables from bottom track variable list
+        self._bottom_track_vars_short = (
+            'pings_per_ensemble',
+            'bottom_track_mode',
+            'max_error_velocity',
+            'beam1_range',
+            'beam2_range',
+            'beam3_range',
+            'beam4_range',
+            'beam1_velocity',
+            'beam2_velocity',
+            'beam3_velocity',
+            'beam4_velocity',
+            'beam1_rssi',
+            'beam2_rssi',
+            'beam3_rssi',
+            'beam4_rssi',
+        )
+
+        # set up water profiling data field variables
+        self._velocity_vars       = self.get_profile_var_list('velocity')
+        self._correlation_vars    = self.get_profile_var_list('correlation')
+        self._echo_intensity_vars = self.get_profile_var_list('echo_intensity')
+        self._percent_good_vars   = self.get_profile_var_list('percent_good')
+
+        # set the lengths of the associated variable lists 
+        self._fixed_leader_len    = len(self.fixed_leader_vars)
+        self._variable_leader_len = len(self.variable_leader_vars)
+        self._derived_len         = len(self.derived_vars)
+        self._bottom_track_len    = len(self.bottom_track_vars)
+        self._velocity_len        = len(self.velocity_vars)
+        self._correlation_len     = len(self.correlation_vars)
+        self._echo_intensity_len  = len(self.echo_intensity_vars)
+        self._percent_good_len    = len(self.percent_good_vars)
+        
+        # set the variable lists for full and shortened list of variables
+        self._label_list          = self.fixed_leader_vars_short    + \
+                                    self.variable_leader_vars_short + \
+                                    self.derived_vars               + \
+                                    self.velocity_vars              + \
+                                    self.bottom_track_vars_short
+
+        self._label_list_long     = self.fixed_leader_vars          + \
+                                    self.variable_leader_vars       + \
+                                    self.derived_vars               + \
+                                    self.velocity_vars              + \
+                                    self.correlation_vars           + \
+                                    self.echo_intensity_vars        + \
+                                    self.percent_good_vars          + \
+                                    self.bottom_track_vars
+
+        self._label_set           = set(self.label_list)
+        self._ensemble_size       = len(self.label_list)
+        self._data_lookup         = {self.label_list[i]:i \
+                                     for i in range(self.ensemble_size)}
+        self._label_set_long      = set(self.label_list_long)
+        self._ensemble_size_long  = len(self.label_list_long)
+        self._data_lookup_long    = {self.label_list_long[i]:i \
+                                     for i in range(self.ensemble_size_long)}
+
+
+    @property
+    def data_abbreviations(self):
+        return self._data_abbreviations
+
+    @property
+    def header_vars(self):
+        return self.get_list_without_id(self._header)
+
+    @property
+    def fixed_leader_vars(self):
+        return self.get_list_without_id(self._fixed_leader)
+
+    @property
+    def fixed_leader_vars_short(self):
+        return self._fixed_leader_vars_short
+    
+    @property
+    def variable_leader_vars(self):
+        return self.get_list_without_id(self._variable_leader)
+
+    @property
+    def variable_leader_vars_short(self):
+        return self._variable_leader_vars_short
+    
+    @property
+    def derived_vars(self):
+        return self._derived
+
+    @property
+    def velocity_vars(self):
+        return self._velocity_vars
+    
+    @property
+    def correlation_vars(self):
+        return self._correlation_vars
+    
+    @property
+    def echo_intensity_vars(self):
+        return self._echo_intensity_vars
+    
+    @property
+    def percent_good_vars(self):
+        return self._percent_good_vars
+    
+    @property
+    def bottom_track_vars(self):
+        return self.get_list_without_id(self._bottom_track)
+    
+    @property
+    def bottom_track_vars_short(self):
+        return self._bottom_track_vars_short
+    
+    @property
+    def header_format(self):
+        return self._header
+
+    @property
+    def fixed_leader_format(self):
+        return self._fixed_leader
+    
+    @property
+    def variable_leader_format(self):
+        return self._variable_leader
+
+    @property
+    def bottom_track_format(self):
+        return self._bottom_track
+
+    @property
+    def fixed_leader_len(self):
+        return self._fixed_leader_len
+
+    @property
+    def variable_leader_len(self):
+        return self._variable_leader_len
+
+    @property
+    def derived_len(self):
+        return self._derived_len
+
+    @property
+    def velocity_len(self):
+        return self._velocity_len
+
+    @property
+    def correlation_len(self):
+        return self._correlation_len
+
+    @property
+    def echo_intensity_len(self):
+        return self._echo_intensity_len
+
+    @property
+    def percent_good_len(self):
+        return self._percent_good_len
+
+    @property
+    def bottom_track_len(self):
+        return self._bottom_track_len
+
+    @property
+    def label_list(self):
+        return self._label_list
+    
+    @property
+    def label_set(self):
+        return self._label_set
+
+    @property
+    def ensemble_size(self):
+        return self._ensemble_size
+    
+    @property
+    def data_lookup(self):
+        return self._data_lookup
+    
+    @property
+    def label_list_long(self):
+        return self._label_list_long
+    
+    @property
+    def label_set_long(self):
+        return self._label_set_long
+
+    @property
+    def ensemble_size_long(self):
+        return self._ensemble_size_long
+    
+    @property
+    def data_lookup_long(self):
+        return self._data_lookup_long
+
+
+    def get_list_without_id(self, var_list):
+        # Note that 'id' term is not a variable, just a flag for parsing 
+        return tuple(_[0] for _ in var_list[1:])
+
+
+    def get_profile_var_name(self, var_type, i, j):
+        """Returns variable name string for variable type, bin, and beam.
+
+        Args:
+            var_type: the variable type string (i.e. 'velocity')
+            i: the bin number 
+            j: the beam (or field) number
+        """
+        return "%s_bin%s_beam%s" % (self._data_abbreviations[var_type], i, j)
+
+
+    def get_profile_var_list(self, var_type):
+        """Returns a tuple of variable names for all bin/beam combinations
+        """
+        return( 
+            tuple(
+                [self.get_profile_var_name(var_type, i, j) 
+                 for i in range(self.NUM_BINS) for j in range(self.NUM_BEAMS)]
+            )
+        )
+
+
+    
