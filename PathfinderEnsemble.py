@@ -6,13 +6,13 @@
 #   2020-01-27  zduguid@mit.edu         implemented PathfinderEnsemble.py
 #   2020-05-05  zduguid@mit.edu         reorganized code with DVL superclass 
 
-import struct
-import sys
 import numpy as np 
 import pandas as pd
+import struct
+import sys
+from datetime import datetime
 from PathfinderDVL import PathfinderDVL
 from PathfinderChecksumError import PathfinderChecksumError
-from datetime import datetime
 
 
 class PathfinderEnsemble(PathfinderDVL):

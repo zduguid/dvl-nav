@@ -5,12 +5,14 @@
 #   2020-05-05  zduguid@mit.edu         reorganized code with DVL superclass 
 
 import csv
-import struct
-import sys
 import numpy as np 
 import pandas as pd
+import struct
+import sys
+import time
 from datetime import datetime
 from PathfinderDVL import PathfinderDVL
+from PathfinderEnsemble import PathfinderEnsemble
 from PathfinderChecksumError import PathfinderChecksumError
 
 
@@ -58,8 +60,78 @@ class PathfinderTimeSeries(PathfinderDVL):
 
 
     @classmethod
-    def from_pd0(cls, filepath, save):
-        pass
+    def from_pd0(cls, filepath, save, verbose=True):
+        """Parses DVL Time Series from given pd0 file. 
+
+        Args: 
+            filepath: the file location of the pd0 to be parsed, requires that 
+                file located at filepath is a valid pd0 file
+            save: boolean flag for saving the resulting time-series or not
+            verbose: boolean flag for printing file information while parsing
+        """
+        PRINT_INTERVAL = 200 
+
+        # open the file 
+        pd0_file = open(filepath, 'rb').read()
+        count = 0
+        if verbose:
+            print('________________________________________')
+            print('- Parsing New File ---------------------')
+            print('    input file: %s' % (filepath,))
+            parse_start = time.time()
+
+        # initialize the time series object
+        name        = filepath.split('/')[-1].split('.')[0]
+        time_series = cls(name)
+
+        # parse ensembles until the end of the pd0 file is reached    
+        while len(pd0_file) > 0:
+
+            # parse an ensemble from the pd0 file and add it to the time series
+            ensemble = PathfinderEnsemble(pd0_file)
+            time_series.add_ensemble(ensemble)
+
+            # chop off the ensemble we just parsed and added to the time series
+            ensemble_len = ensemble.num_bytes + 2
+            pd0_file     = pd0_file[ensemble_len:]
+            count       += 1
+
+            # print number of ensembles parsed periodically 
+            if verbose:
+                if (count % PRINT_INTERVAL == 0):
+                    print('    # ensembles:  %5d' % (count,))
+
+        # convert to data-frame once all ensembles are collected
+        time_series.to_dataframe()
+        
+        # parsing completed 
+        if verbose:
+            parse_stop = time.time()
+            print('- Parsing Complete ---------------------')
+            print('    # ensembles:  %5d'    % (count))
+            print('    parsing time:  %f'    % (parse_stop - parse_start))
+
+        # save the file to .csv format
+        if save:
+            
+            # determine how to save the file
+            root, _, glider, _ = filepath.rsplit('/',3)
+            directory = root + '/' + 'pd0-parsed/' + glider + '/'
+            
+            # save the file using pandas 
+            save_start = time.time()
+            time_series.save_as_csv(name=name, directory=directory)
+            save_stop  = time.time()
+            if verbose:
+                print('    saving time:   %f'    % (save_stop - save_start))
+                print('    output file:   %s'    % (name+'.CSV'))
+
+        # parse the configurations for diagnostic purposes
+        if verbose:
+            ensemble.parse_system_configuration()
+            ensemble.parse_coordinate_transformation()
+     
+        return(time_series)
 
 
     def add_ensemble(self, ensemble):
