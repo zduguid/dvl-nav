@@ -81,20 +81,22 @@ class PathfinderTimeSeries(PathfinderDVL):
             parse_start = time.time()
 
         # initialize the time series object
-        name        = filepath.split('/')[-1].split('.')[0]
-        time_series = cls(name)
+        name          = filepath.split('/')[-1].split('.')[0]
+        time_series   = cls(name)
+        prev_ensemble = None
 
         # parse ensembles until the end of the pd0 file is reached    
         while len(pd0_file) > 0:
 
             # parse an ensemble from the pd0 file and add it to the time series
-            ensemble = PathfinderEnsemble(pd0_file)
+            ensemble = PathfinderEnsemble(pd0_file, prev_ensemble)
             time_series.add_ensemble(ensemble)
 
             # chop off the ensemble we just parsed and added to the time series
-            ensemble_len = ensemble.num_bytes + 2
-            pd0_file     = pd0_file[ensemble_len:]
-            count       += 1
+            ensemble_len  = ensemble.num_bytes + 2
+            pd0_file      = pd0_file[ensemble_len:]
+            count        += 1
+            prev_ensemble = ensemble
 
             # print number of ensembles parsed periodically 
             if verbose:
@@ -192,6 +194,8 @@ class PathfinderTimeSeries(PathfinderDVL):
         # save DataFrame to csv file
         if self.df is not None:
             self.df.to_csv(directory+name+'.CSV')
+            odometry = self.df[['time','rel_pos_x', 'rel_pos_y', 'rel_pos_z']]
+            odometry.to_csv(directory+name+'_odometry.CSV')
         else:
             print("WARNING: No data to save.")
 

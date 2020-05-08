@@ -1,4 +1,10 @@
-# dvl-nav
+<a href="https://github.com/zduguid">
+    <img src="README/glider2.png" alt="glider_image" align="right" height="70">
+</a>
+
+
+# DVL Navigation
+<!---------------------------------------------->
 
 ## Table of Contents 
 - [Data Field Information](#data-field-information)
@@ -9,25 +15,27 @@
   - [Water Profiling Fields](#water-profilingp-fields)
   - [Bottom Track Fields](#bottom-track-fields)
 - [Helpful Commands](#helpful-commands)
+- [Miscellaneous Notes](#miscellaneous-notes)
 - [List of TODOs](#list-of-todos)
 
-<!-- 
--------------------------------------------------
-Most Recent Changes:
-- adding details to README 
-  - better linking 
-  - unit and variable name information 
 
-README TODOs 
+<!-----------------------------------------------
+Most Recent Changes:
+- implemented basic odometry 
+- fixed bug in using DVL velocities incorrectly (0-index issue)
+
+
+Changes Before Commit: 
+- improve documentation
+
+Upcoming Tasks:
+- don't worry about 80 char limit of sublime editor -- github has good parsing of table information -- feel free to add more extensive table information.
 - finish writing system_configuration table (see pathfinder manual)
 - finish writing bottom_track information table (see pathfinder manual)
-- check for units of echo intensity (0.61 dB?)
--------------------------------------------------
- -->
+------------------------------------------------>
 
 
-
--------------------------------------------------
+<!---------------------------------------------->
 ## Data Field Information  
 ### Fixed Leader Fields 
 | Variable Name         | Units | Description                                 |
@@ -87,7 +95,7 @@ Example: `EX11111 = coordinate_transformation = 31`: earth coordinate transforma
 | `vel_cell#_beam#`     | [m/s] | velocity, depends on coordinate transform   |
 | `cor_cell#_beam#`     |       | linear scale of correlation mag (255 = best)|
 | `ech_cell#_beam#`     |       | echo intensity                              |
-| `per_cell#_beam#`     |       | percent good data quality indicator         |
+| `per_cell#_beam#`     |       | percent good data quality indicator         n|
 
 
 ### Bottom Track Fields 
@@ -104,15 +112,29 @@ Example: `EX11111 = coordinate_transformation = 31`: earth coordinate transforma
 
 
 
--------------------------------------------------
+<!---------------------------------------------->
 ## Helpful Commands 
 - `python -m cProfile -s tottime simul.py`
   - run Python profiler over function
 
 
 
--------------------------------------------------
+<!---------------------------------------------->
+## Miscellaneous Notes
+- Whenever possible, numpy or pandas vectorized operations should be used. In order of fastest to slowest: numpy vectorized functions, pandas vectorized functions, lambda functions, pandas built-in loop, python standard loop. Looping over pandas objects should be avoided at all costs.  
+  - [Towards Data Science: How to make your pandas loop 71,803 times faster](https://towardsdatascience.com/how-to-make-your-pandas-loop-71-803-times-faster-805030df4f06)
+  - [Medium: A Beginner’s Guide to Optimizing Pandas Code for Speed](https://engineering.upside.com/a-beginners-guide-to-optimizing-pandas-code-for-speed-c09ef2c6a4d6)
+- the best way to incrementally build a numpy array, without knowing the final array size ahead of time, is to append numpy array rows to a python list and then cast the list into a 2D numpy array at the end. Using the `np.concatenate()` or `numpy.append()` functions are much slower. One downside of casting a python list to a numpy array is that both the list and array will be stored in memory at the same time. 
+  - [Stack Overflow: Best way to incrementally build a numpy array](https://stackoverflow.com/questions/30468454/what-is-the-best-way-to-incrementally-build-a-numpy-array)
+
+
+<!---------------------------------------------->
 ## List of TODOs
+
+### General TODOs
+- add parent class `PathfinderDVL` that defines variable names, derived variables, etc. (similar to Micron sonar)
+- add "save compressed version" that does not include echo intensities, percent-good, bottom-track, etc. -- only the most relevant information in a small number of columns (add a flag for only considering the "compressed version of the data")
+- change "cell" to "bin" -- will be easier to read
 
 ### `pd0_reader.py`
 - try combing data from multiple files -- think about timestamps organization 
@@ -121,13 +143,21 @@ Example: `EX11111 = coordinate_transformation = 31`: earth coordinate transforma
 - IPython notebook for plotting DVL data -- notebook format encourages interaction with data visualization processing (and ensures that glider scripts are not burdened with any processing functions)
 
 ### `PathfinderEnsemble.py`
-- add `MultiIndex` functionality for hierarchical variable accessing (this is the pandas solution for working with higher dimensional datasets) (potentially add some helper functions here to make array access easier)
-- look into how importing and exporting csv files with MultiIndex works - might be better to pickle and un-pickle my own class objects (faster / more memory efficient / easier to work with in the future)
+- make "get_data" function that is more similar to the micron sonar function
+- remove the code that calls the `setattr` function (use get_data instead)
+- better documentation about how to use the software 
+- turn this into a sub-method: # store parsed values in the data array 
+- change name of velocity variables? (instead of beam1, beam2, etc., could use velocity1, velocity2, etc. which may be less confusing because only one of the four coordinate system options includes velocities along the beam axis)
 - think about what data-fields will be needed for on-board processing (not everything will be required and we want to be as light weight as possible)
 - add another dict attribute that keeps track of units?
-- determine how to access some of the more relevant variables from fixed_leader (i.e. coordinate_transformation, etc.) the answer might just be to do all the necessary parsing and transformation before saving to csv file format
+- determine how to access some of the more relevant variables from fixed_leader (i.e. coordinate_transformation, etc.) the answer might just be to do all the necessary parsing and transformation before saving to csv file format. Alternatively, can include the fixed leader variables in the ensemble itself.
 - add some of the fixed-leader variables to the dataframe (when combining multiple missions it is possible that these would change over-time, i.e. if the backseat driver sends a command to the DVL during the mission)
 
 ### `PathfinderTimeSeries.py`
 - encode various navigation functions (review Rich Matlab code for this)
 - test ensemble rollover works in case when 65535 ensembles occur
+- add additional class method constructors (checkout MicronTimeSeries)
+  - add 'from_csv'
+  - add 'from_csv_directory'
+  - add 'from_frames'
+  - note this is more complicated than the MicronSonar example because need to keep track of previous ensemble references 

@@ -16,7 +16,7 @@ from PathfinderChecksumError import PathfinderChecksumError
 
 
 class PathfinderEnsemble(PathfinderDVL):
-    def __init__(self, pd0_bytes):
+    def __init__(self, pd0_bytes, prev_ensemble=None, gps_fix=None):
         """Constructor for a Doppler Velocity Log (DVL) Ensemble object. 
 
         The 'Pathfinder Doppler Velocity Log (DVL) 600 kHz' user manual was 
@@ -33,6 +33,12 @@ class PathfinderEnsemble(PathfinderDVL):
 
         Args: 
             pd0_bytes: pd0 bytes to be parsed into a DVL ensemble.
+            prev_ensemble: previously collected PathfinderEnsemble. The 
+                previous ensemble is used for deducing Pathfinder 
+            gps_fix: (x,y) GPS location, used to update the position of the  
+                relative frame. As a result, every dive (both start of mission
+                and every subsequent surfacing) will have a different relative
+                frame of reference.
 
         Returns:
             A new Ensemble that has been parsed from the given pd0 bytes, or 
@@ -47,6 +53,10 @@ class PathfinderEnsemble(PathfinderDVL):
 
         # initialize Micron Ensemble data array based on number of variables
         self._data_array = np.zeros(self.ensemble_size)
+
+        # store the previous ensemble and GPS fix information
+        self._prev_ensemble = prev_ensemble
+        self._gps_fix = gps_fix
 
         # map from byte id to parsing function 
         self._data_id_parsers = {
@@ -66,6 +76,14 @@ class PathfinderEnsemble(PathfinderDVL):
     @property
     def data_array(self):
         return self._data_array
+
+    @property
+    def prev_ensemble(self):
+        return self._prev_ensemble
+
+    @property
+    def gps_fix(self):
+        return self._gps_fix
   
     @property
     def data_id_parsers(self):
@@ -138,6 +156,9 @@ class PathfinderEnsemble(PathfinderDVL):
                 data_dict = parser(pd0_bytes, name, address)
             else:
                 print('  WARNING: no parser found for header %d' %(header_id,))
+
+        # parse derived variables 
+        self.parse_derived_variables()
 
 
     def unpack_bytes(self, pd0_bytes, format_tuples, offset=0):
@@ -370,7 +391,7 @@ class PathfinderEnsemble(PathfinderDVL):
             if key in self.label_set:
                 self.set_data(key, variable_leader[key])
 
-        self.convert_to_metric('depth_of_transducer',     self.DM_TO_M)
+        self.convert_to_metric('depth',                   self.DM_TO_M)
         self.convert_to_metric('heading',                 self.HUNDRETH_TO_DEG)
         self.convert_to_metric('pitch',                   self.HUNDRETH_TO_DEG)
         self.convert_to_metric('roll',                    self.HUNDRETH_TO_DEG)
@@ -453,19 +474,109 @@ class PathfinderEnsemble(PathfinderDVL):
             convert_special_to_metric(var, self.BAD_BT_RANGE, self.CM_TO_M)
 
         # convert relevant fields to standard metric quantities
+        convert_velocity_to_metric('btm_beam0_velocity')
         convert_velocity_to_metric('btm_beam1_velocity')
         convert_velocity_to_metric('btm_beam2_velocity')
         convert_velocity_to_metric('btm_beam3_velocity')
-        convert_velocity_to_metric('btm_beam4_velocity')
+        convert_bt_range_to_metric('btm_beam0_range')
         convert_bt_range_to_metric('btm_beam1_range')
         convert_bt_range_to_metric('btm_beam2_range')
         convert_bt_range_to_metric('btm_beam3_range')
-        convert_bt_range_to_metric('btm_beam4_range')
         self.convert_to_metric('btm_max_error_velocity', self.MM_TO_M)
+        self.convert_to_metric('btm_beam0_rssi',         self.COUNT_TO_DB)
         self.convert_to_metric('btm_beam1_rssi',         self.COUNT_TO_DB)
         self.convert_to_metric('btm_beam2_rssi',         self.COUNT_TO_DB)
         self.convert_to_metric('btm_beam3_rssi',         self.COUNT_TO_DB)
-        self.convert_to_metric('btm_beam4_rssi',         self.COUNT_TO_DB)
+
+
+    def parse_derived_variables(self):
+        """Computes the derived variables specified in PathfinderDVL.
+
+        Uses information from other variables 
+        """
+        # check that the DVL is reporting data in earth coordinates
+        EARTH_FRAME = 'Earth Coords'
+        EPSILON     = 1e-5
+        coordinate_frame = self.parse_coordinate_transformation(verbose=False)
+        if coordinate_frame != EARTH_FRAME:
+            raise ValueError('Bad coord frame: expected = %s, actual = %s' % 
+                             (EARTH_FRAME, coordinate_frame))
+
+        # assume zero angle of attack
+        self.set_data('angle_of_attack', 0)
+
+        # previous ensemble not given
+        #   + assume beginning of dive
+        if not self.prev_ensemble:
+
+            # set origin to (0,0) if not specified
+            if not self.gps_fix:
+                self.set_data('origin_x', 0)
+                self.set_data('origin_y', 0)
+
+        # otherwise extract information from the previous ensemble 
+        else:
+
+            # extract position information from previous ensemble 
+            prev_rel_pos_x = self.prev_ensemble.get_data('rel_pos_x')
+            prev_rel_pos_y = self.prev_ensemble.get_data('rel_pos_y')
+            prev_rel_pos_z = self.prev_ensemble.get_data('rel_pos_z')
+            prev_t         = self.prev_ensemble.get_data('time') 
+
+            # compute through water velocity from pressure method
+            self.set_data('rel_pos_z',  self.depth)
+            self.set_data('delta_z',    self.rel_pos_z - prev_rel_pos_z)
+            self.set_data('delta_t',    self.time      - prev_t)
+            self.set_data('abs_vel_w',  self.delta_z/self.delta_t)
+
+            # computer horizontal velocity in relative frame 
+            #   + avoid division by zero
+            if abs(self.pitch) < EPSILON:
+                if self.pitch < 0:
+                    pitch = -EPSILON
+                else:
+                    pitch =  EPSILON
+            else:                         
+                pitch = self.pitch
+
+            # compute relative horizontal velocities using pressure and compass
+            rel_vel_h = self.abs_vel_w/np.tan(-pitch*self.DEG_TO_RAD)
+            rel_vel_u = rel_vel_h*np.sin(self.heading*self.DEG_TO_RAD)
+            rel_vel_v = rel_vel_h*np.cos(self.heading*self.DEG_TO_RAD)
+            self.set_data('rel_vel_pressure_u', rel_vel_u)
+            self.set_data('rel_vel_pressure_v', rel_vel_v)
+
+            # book-keep through water velocity measured by DVL
+            self.set_data('rel_vel_dvl_u', -self.vel_bin0_beam0)
+            self.set_data('rel_vel_dvl_v', -self.vel_bin0_beam1)
+
+            # book-keep bottom track velocity if we have it  
+            if not np.isnan(self.get_data('btm_beam0_velocity')):
+                self.set_data('abs_vel_btm_u', -self.btm_beam0_velocity)
+                self.set_data('abs_vel_btm_v', -self.btm_beam1_velocity)
+
+                # update relative position using bottom track velocity 
+                self.set_data('delta_x',   self.delta_t*self.abs_vel_btm_u)
+                self.set_data('delta_y',   self.delta_t*self.abs_vel_btm_v)
+                self.set_data('rel_pos_x', prev_rel_pos_x + self.delta_x)
+                self.set_data('rel_pos_y', prev_rel_pos_y + self.delta_y)
+
+            else:
+                # otherwise update relative position using relative velocities
+                self.set_data('delta_x', self.delta_t*self.rel_vel_dvl_u)
+                self.set_data('delta_y', self.delta_t*self.rel_vel_dvl_v)
+                self.set_data('rel_pos_x', prev_rel_pos_x + self.delta_x)
+                self.set_data('rel_pos_y', prev_rel_pos_y + self.delta_y)
+                self.set_data('abs_vel_btm_u', np.NaN)
+                self.set_data('abs_vel_btm_v', np.NaN)
+
+        # update origin and relative position if GPS fix is given
+        if self.gps_fix:
+            self.set_data('origin_x',  self.gps_fix[0])
+            self.set_data('origin_y',  self.gps_fix[0])
+            self.set_data('rel_pos_x', 0)
+            self.set_data('rel_pos_y', 0)
+            self.set_data('rel_pos_z', self.depth)
 
 
     def parse_system_configuration(self, verbose=True):
@@ -583,5 +694,7 @@ class PathfinderEnsemble(PathfinderDVL):
             print('    ' + three_beam_used_set)
             print('    ' + tilts_used_set)
             print('    ' + coord_frame_set)
+
+        return coord_frame_set
 
 

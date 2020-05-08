@@ -3,6 +3,8 @@
 # Superclass for Pathfinder DVL data 
 #   2020-05-05  zduguid@mit.edu         initial implementation
 
+import numpy as np
+
 class PathfinderDVL(object):
     def __init__(self):
         """Parent class for Pathfinder DVL data 
@@ -11,13 +13,15 @@ class PathfinderDVL(object):
         different Pathfinder DVL objects. 
         """
         # constants for unit conversion 
-        self.DAM_TO_M        = 10       #      [dam] -> [m]
-        self.DM_TO_M         = 1/10     #       [dm] -> [m]
-        self.CM_TO_M         = 1/100    #       [cm] -> [m]
-        self.MM_TO_M         = 1/1000   #       [mm] -> [m]
-        self.TENTH_TO_DEG    = 1/10     #  [0.1 deg] -> [deg]
-        self.HUNDRETH_TO_DEG = 1/100    # [0.01 deg] -> [deg]
-        self.COUNT_TO_DB     = 0.61     #    [0,255] -> [dB]
+        self.DAM_TO_M        = 10           #      [dam] -> [m]
+        self.DM_TO_M         = 1/10         #       [dm] -> [m]
+        self.CM_TO_M         = 1/100        #       [cm] -> [m]
+        self.MM_TO_M         = 1/1000       #       [mm] -> [m]
+        self.TENTH_TO_DEG    = 1/10         #  [0.1 deg] -> [deg]
+        self.HUNDRETH_TO_DEG = 1/100        # [0.01 deg] -> [deg]
+        self.COUNT_TO_DB     = 0.61         #    [0,255] -> [dB]
+        self.DEG_TO_RAD      = np.pi/180    #      [deg] -> [rad]
+        self.RAD_TO_DEG      = 180/np.pi    #      [rad] -> [deg]
 
         # constants for the Pathfinder instrument 
         #   + set values for num_beams and num_bins for more efficient 
@@ -41,9 +45,36 @@ class PathfinderDVL(object):
 
         # variables that can be derived from other ensemble variables 
         #   - for example, this could navigation or odometry variables
-        #   - OKAY to add and edit the variables in this list 
+        #   - OKAY to add and edit the variables in this list. If variables are
+        #     added, make sure to implement the corresponding parsing function
+        #     to the 'PathfinderEnsemble.parse_derived_variables()' function
         self._derived = (
+            # relative velocities
+            'rel_vel_pressure_u',
+            'rel_vel_pressure_v',
+            'rel_vel_dvl_u',
+            'rel_vel_dvl_v',
 
+            # absolute velocities 
+            'abs_vel_btm_u',
+            'abs_vel_btm_v',
+            'abs_vel_w',
+
+            # positions
+            'delta_x',
+            'delta_y',
+            'delta_z',
+            'delta_t',
+            'rel_pos_x',
+            'rel_pos_y',
+            'rel_pos_z',
+            'origin_x',
+            'origin_y',
+            'angle_of_attack',
+
+            # seafloor information 
+            # ex: seafloor depth
+            # ex: seafloor surface normal (two values)
         )
 
         # tuple of variables that are automatically reported by Pathfinder
@@ -134,7 +165,7 @@ class PathfinderDVL(object):
             ('ensemble_roll_over',              'B',    11),
             ('bit_result',                      '<H',   12),
             ('speed_of_sound',                  '<H',   14),    # [m/s]
-            ('depth_of_transducer',             '<H',   16),    # [dm]
+            ('depth',             '<H',   16),    # [dm]
             ('heading',                         '<H',   18),    # [0.01 deg]
             ('pitch',                           '<h',   20),    # [0.01 deg]
             ('roll',                            '<h',   22),    # [0.01 deg]
@@ -170,7 +201,7 @@ class PathfinderDVL(object):
             'ensemble_roll_over',
             'bit_result',
             'speed_of_sound',
-            'depth_of_transducer',
+            'depth',
             'heading',
             'pitch',
             'roll',
@@ -198,55 +229,55 @@ class PathfinderDVL(object):
             ('btm_min_echo_intensity_amp',          'B',     7),
             ('btm_bottom_track_mode',               'B',     9),
             ('btm_max_error_velocity',              '<H',   10),    # [mm/s]
-            ('btm_beam1_range',                     '<H',   16),    # [cm]
-            ('btm_beam2_range',                     '<H',   18),    # [cm]
-            ('btm_beam3_range',                     '<H',   20),    # [cm]
-            ('btm_beam4_range',                     '<H',   22),    # [cm]
-            ('btm_beam1_velocity',                  '<h',   24),    # [mm/s]
-            ('btm_beam2_velocity',                  '<h',   26),    # [mm/s]
-            ('btm_beam3_velocity',                  '<h',   28),    # [mm/s]
-            ('btm_beam4_velocity',                  '<h',   30),    # [mm/s]
-            ('btm_beam1_correlation',               'B',    32),
-            ('btm_beam2_correlation',               'B',    33),
-            ('btm_beam3_correlation',               'B',    34),
-            ('btm_beam4_correlation',               'B',    35),        
-            ('btm_beam1_echo_intensity',            'B',    36),
-            ('btm_beam2_echo_intensity',            'B',    37),
-            ('btm_beam3_echo_intensity',            'B',    38),
-            ('btm_beam4_echo_intensity',            'B',    39),
-            ('btm_beam1_percent_good',              'B',    40),
-            ('btm_beam2_percent_good',              'B',    41),
-            ('btm_beam3_percent_good',              'B',    42),
-            ('btm_beam4_percent_good',              'B',    43),
+            ('btm_beam0_range',                     '<H',   16),    # [cm]
+            ('btm_beam1_range',                     '<H',   18),    # [cm]
+            ('btm_beam2_range',                     '<H',   20),    # [cm]
+            ('btm_beam3_range',                     '<H',   22),    # [cm]
+            ('btm_beam0_velocity',                  '<h',   24),    # [mm/s]
+            ('btm_beam1_velocity',                  '<h',   26),    # [mm/s]
+            ('btm_beam2_velocity',                  '<h',   28),    # [mm/s]
+            ('btm_beam3_velocity',                  '<h',   30),    # [mm/s]
+            ('btm_beam0_correlation',               'B',    32),
+            ('btm_beam1_correlation',               'B',    33),
+            ('btm_beam2_correlation',               'B',    34),
+            ('btm_beam3_correlation',               'B',    35),        
+            ('btm_beam0_echo_intensity',            'B',    36),
+            ('btm_beam1_echo_intensity',            'B',    37),
+            ('btm_beam2_echo_intensity',            'B',    38),
+            ('btm_beam3_echo_intensity',            'B',    39),
+            ('btm_beam0_percent_good',              'B',    40),
+            ('btm_beam1_percent_good',              'B',    41),
+            ('btm_beam2_percent_good',              'B',    42),
+            ('btm_beam3_percent_good',              'B',    43),
             ('btm_ref_layer_min',                   '<H',   44),    # [dm]
             ('btm_ref_layer_near',                  '<H',   46),    # [dm]
             ('btm_ref_layer_far',                   '<H',   48),    # [dm]
-            ('btm_beam1_ref_layer_velocity',        '<h',   50),    # [mm/s]
-            ('btm_beam2_ref_layer_velocity',        '<h',   52),    # [mm/s]
-            ('btm_beam3_ref_layer_velocity',        '<h',   54),    # [mm/s]
-            ('btm_beam4_ref_layer_velocity',        '<h',   56),    # [mm/s]
-            ('btm_beam1_ref_layer_correlation',     'B',    58),
-            ('btm_beam2_ref_layer_correlation',     'B',    59),
-            ('btm_beam3_ref_layer_correlation',     'B',    60),
-            ('btm_beam4_ref_layer_correlation',     'B',    61),
-            ('btm_beam1_ref_layer_echo_intensity',  'B',    62),
-            ('btm_beam2_ref_layer_echo_intensity',  'B',    63),
-            ('btm_beam3_ref_layer_echo_intensity',  'B',    64),
-            ('btm_beam4_ref_layer_echo_intensity',  'B',    65),
-            ('btm_beam1_ref_layer_percent_good',    'B',    66),
-            ('btm_beam2_ref_layer_percent_good',    'B',    67),
-            ('btm_beam3_ref_layer_percent_good',    'B',    68),
-            ('btm_beam4_ref_layer_percent_good',    'B',    69),
+            ('btm_beam0_ref_layer_velocity',        '<h',   50),    # [mm/s]
+            ('btm_beam1_ref_layer_velocity',        '<h',   52),    # [mm/s]
+            ('btm_beam2_ref_layer_velocity',        '<h',   54),    # [mm/s]
+            ('btm_beam3_ref_layer_velocity',        '<h',   56),    # [mm/s]
+            ('btm_beam0_ref_layer_correlation',     'B',    58),
+            ('btm_beam1_ref_layer_correlation',     'B',    59),
+            ('btm_beam2_ref_layer_correlation',     'B',    60),
+            ('btm_beam3_ref_layer_correlation',     'B',    61),
+            ('btm_beam0_ref_layer_echo_intensity',  'B',    62),
+            ('btm_beam1_ref_layer_echo_intensity',  'B',    63),
+            ('btm_beam2_ref_layer_echo_intensity',  'B',    64),
+            ('btm_beam3_ref_layer_echo_intensity',  'B',    65),
+            ('btm_beam0_ref_layer_percent_good',    'B',    66),
+            ('btm_beam1_ref_layer_percent_good',    'B',    67),
+            ('btm_beam2_ref_layer_percent_good',    'B',    68),
+            ('btm_beam3_ref_layer_percent_good',    'B',    69),
             ('btm_max_tracking_depth',              '<H',   70),    # [dm]
-            ('btm_beam1_rssi',                      'B',    72),
-            ('btm_beam2_rssi',                      'B',    73),
-            ('btm_beam3_rssi',                      'B',    74),
-            ('btm_beam4_rssi',                      'B',    75),
+            ('btm_beam0_rssi',                      'B',    72),
+            ('btm_beam1_rssi',                      'B',    73),
+            ('btm_beam2_rssi',                      'B',    74),
+            ('btm_beam3_rssi',                      'B',    75),
             ('btm_shallow_water_gain',              'B',    76),
-            ('btm_beam1_msb',                       'B',    77),    # [cm]
-            ('btm_beam2_msb',                       'B',    78),    # [cm]
-            ('btm_beam3_msb',                       'B',    79),    # [cm]
-            ('btm_beam4_msb',                       'B',    80),    # [cm]
+            ('btm_beam0_msb',                       'B',    77),    # [cm]
+            ('btm_beam1_msb',                       'B',    78),    # [cm]
+            ('btm_beam2_msb',                       'B',    79),    # [cm]
+            ('btm_beam3_msb',                       'B',    80),    # [cm]
         )
 
         # down-select most useful variables from bottom track variable list
@@ -254,18 +285,18 @@ class PathfinderDVL(object):
             'btm_pings_per_ensemble',
             'btm_bottom_track_mode',
             'btm_max_error_velocity',
+            'btm_beam0_range',
             'btm_beam1_range',
             'btm_beam2_range',
             'btm_beam3_range',
-            'btm_beam4_range',
+            'btm_beam0_velocity',
             'btm_beam1_velocity',
             'btm_beam2_velocity',
             'btm_beam3_velocity',
-            'btm_beam4_velocity',
+            'btm_beam0_rssi',
             'btm_beam1_rssi',
             'btm_beam2_rssi',
             'btm_beam3_rssi',
-            'btm_beam4_rssi',
         )
 
         # set up water profiling data field variables
