@@ -3,161 +3,216 @@
 </a>
 
 
-# DVL Navigation
-<!---------------------------------------------->
-
-## Table of Contents 
-- [Data Field Information](#data-field-information)
-  - [Fixed Leader Fields](#fixed-leader-fields)
-    - [System Configuration](#system-configuration)
-    - [Coordinate Transformation](#coordinate-transformation)
-  - [Variable Leader Fields](#variable-leader-fields)
-  - [Water Profiling Fields](#water-profilingp-fields)
-  - [Bottom Track Fields](#bottom-track-fields)
-- [Helpful Commands](#helpful-commands)
-- [Miscellaneous Notes](#miscellaneous-notes)
-- [List of TODOs](#list-of-todos)
-
 
 <!-----------------------------------------------
 Most Recent Changes:
-- implemented basic odometry 
-- fixed bug in using DVL velocities incorrectly (0-index issue)
-
-
-Changes Before Commit: 
 - improve documentation
 
-Upcoming Tasks:
-- don't worry about 80 char limit of sublime editor -- github has good parsing of table information -- feel free to add more extensive table information.
-- finish writing system_configuration table (see pathfinder manual)
-- finish writing bottom_track information table (see pathfinder manual)
+Changes Before Commit: 
 ------------------------------------------------>
 
 
+
+<!---------------------------------------------------------------------------->
+# DVL Navigation
+
+This repository is used for parsing pd0 data from the Pathfinder DVL instrument and then processing data to perform navigation and sensing for the Slocum Glider. The methods used in this repository are designed to work as a real-time process onboard the glider. 
+
+In the context of this repository, an "ensemble" refers to a collection of oceanographic variables that are reported at the same moment in time by the Pathfinder DVL instrument. A series of these ensembles over time are referred to as a "time series". 
+
+There are three Pathfinder object classes implemented in this repository: 
+1. `PathfinderDVL` -- superclass of the Pathfinder objects which defines variables that are present in raw pd0 files output Pathfinder objects. The superclass also defines useful constants for parsing and navigation.
+1. `PathfinderEnsemble` -- represents a single ensemble of data reported from the Pathfinder DVL at a moment in time. The input to the PathfinderEnsemble is a string of bytes from the DVL instrument. 
+1. `PathfinderTimeSeries` -- represents a time series of Pathfinder DVL data. As data is reported from the DVL instrument during the mission, data can be collected in the time series using the `add_ensemble()` method. Alternatively, when working with Pathfinder data offline, an entire pd0 file can be collected into a time series object with the `from_pd0()` class method. 
+
+
+
+<!---------------------------------------------------------------------------->
+## Table of Contents 
+- [PathfinderTimeSeries Class Overview](#pathfindertimeseries-class-overview)
+- [Data Field Information](#data-field-information)
+  - [Fixed Leader Fields](#fixed-leader-fields)
+  - [Variable Leader Fields](#variable-leader-fields)
+  - [Derived Fields](#derived-fields)
+  - [Water Profiling Fields](#water-profilingp-fields)
+  - [Bottom Track Fields](#bottom-track-fields)
+- [Miscellaneous Notes](#miscellaneous-notes)
+
+
+
+<!---------------------------------------------------------------------------->
+## PathfinderTimeSeries Class Overview 
 <!---------------------------------------------->
+### How to parse a raw pd0 file
+
+`time_series = PathfinderTimeSeries.from_pd0('/path/to/pd0/file.pd0')`
+
+This function will open a raw pd0 file and parse it into a PathfinderTimeSeries object. A PathfinderTimeseries object will contain all of the fields mentioned in the [data field information](#data-field-information) section below. By default, the `from_pd0` function prints out some helpful diagnostic information about the pd0 file. If this behavior is not desired, include the argument `verbose=False` to the function call. An example of the diagnostic information is shown below.
+```
+________________________________________
+- Parsing New File ---------------------
+    input file: /path/to/pd0/file/01820002.pd0
+    # ensembles:    200
+    # ensembles:    400
+    # ensembles:    600
+    # ensembles:    800
+    # ensembles:   1000
+    # ensembles:   1200
+    # ensembles:   1400
+    # ensembles:   1600
+    # ensembles:   1800
+    # ensembles:   2000
+    # ensembles:   2200
+    # ensembles:   2400
+- Parsing Complete ---------------------
+    # ensembles:   2410
+    parsing time:  5.284270
+- Sensor Configuration -----------------
+    600kHz System
+    Convex Beam Pattern
+    Sensor Config #1
+    Attached
+    Down Facing
+    30E Beam Angle
+    4 Beam Janus
+- Coordinate Transformation ------------
+    Bin Mapping Used
+    3-Beam Soln Used
+    Tilts Used
+    Earth Coords
+```
+
+
+<!---------------------------------------------->
+### How to access a data field from a PathfinderTimeSeries
+
+After parsing a pd0 file into a time series, you can easily access time series data via querying the pandas DataFrame attribute: 
+
+`pitch = time_series.df.pitch` or 
+`pitch = time_series.df['pitch']`
+
+The two snippets above will access the time series pitch data from the DataFrame and store that data in the new `pitch` variable.
+
+
+
+<!---------------------------------------------->
+### How to add a new data field to PathfinderTimeSeries 
+
+Add the desired variable name to the derived variables tuple in the PathfinderDVL superclass, and then implement the corresponding parsing method to the `parse_derived_variables()` function in the PathfinderEnsemble class.
+
+
+
+<!---------------------------------------------------------------------------->
 ## Data Field Information  
+<!---------------------------------------------->
 ### Fixed Leader Fields 
 | Variable Name         | Units | Description                                 |
 | ---                   | :---: | ---                                         |
-| `system_configuration`|       | several settings, see table below           |
-| `num_velocity_beams`  |       | number of beams to calculate velocity data  |
-| `num_cells`           |       | number of depth cells [0, 255]              |
-| `pings_per_ensemble`  |       | number of pings averaged per ensemble       |
-| `depth_cell_length`   | [m]   | length of one depth cell                    |
-| `coordinate_transformation` | | several settings, 31 = earth reference frame|
-| `heading_alignment`   | [deg] | correction factor for physical misalignment |
-| `heading_bias`        | [deg] | correction factor for magnetic bias         |
-| `sensor_source`       |       | several settings, 130 = all available       |
+| `system_configuration`|       | Several settings are described here. To parse the information, the numerical value must be converted to binary and then each bit must be decoded. The operating frequency and beam configuration parameters are described here. |
+| `num_beams`           |       | Number of beams used to calculate velocity data. The minimum number required to back-out velocity is 3 beams. If four beams are used, the problem becomes over-constrained and the instrument reports an error velocity. |
+| `num_bins`            |       | Number of depth bins [0, 255].              |
+| `pings_per_ensemble`  |       | Number of pings averaged together in each ensemble. |
+| `depth_bin_length`    | [m]   | Length of each depth bin.                   |
+| `blanking_distance`   | [m]   | Blanking distance used by Pathfinder to allow ringing effect to recover before processing received data |
+| `low_correlation_threshold` | | The minimum threshold of correlation that water-profile data can have to be considered good data |
+| `percent_good_minimum`      | | Contains the minimum percentage of water-profiling pings in an ensemble that must be considered good to output velocity data. |
+| `error_velocity_threshold`  | [mm/s] | Contains the threshold value used to flag water-current data as good or bad. |
+| `coordinate_transformation` | | Several settings are described here. To parse the information, the numerical value must be converted to binary and then each bit must be decoded. Most importantly, the coordinate frame for instrument data is reported here. The coordinate frame is one of: beam coordinates, instrument coordinates, ship coordinates, or Earth coordinates. |
+| `heading_alignment`   | [deg] | Contains a correction factor for physical heading misalignment. |
+| `heading_bias`        | [deg] | Contains a correction factor for electrical/magnetic heading bias. |
+| `sensor_source`       |       | Several settings are described here. To parse the information, the numerical value must be converted to binary and then each bit must be decoded. This field explains were environmental sensor data is coming from. | 
+| `bin0_distance`       | [m]   | This field contains the distance to the middle of the first depth bin. This distance is a function of depth bin length, the profiling mode, the blank after transmit distance, and speed of sound. | 
+| `transmit_pulse_length` | [m] | Contains the length of the transmit pulse. | 
 
 
-#### System Configuration
 
-Example: `system_configuration = 16971 = 1101,0010,0100,0010` [bit0,...,bit15]
-In bit order, this means: 
-- [TODO: write a table here with information from pg162 of pathfinder manual]
-
-
+<!---------------------------------------------->
 #### Coordinate Transformation
-| EX-Cmd  | Value | Coord Sys | Vel 1     | Vel 2     | Vel 3     | Vel 4     |
-| ---     | ---   | ---       | ---       | ---       | ---       | ---       |
-| 00xxx   | 7     | Beam      | to beam1  | to beam2  | to beam3  | to beam4  |
-| 01xxx   | 15    | Instrument| bm1-bm2   | bm4-bm3   | to xducer | err vel   |
-| 10xxx   | 23    | Ship      | prt-stbd  | aft-fwd   | to surface| err vel   |
-| 11xxx   | 31    | Earth     | to East   | to West   | to surface| err vel   |
 
-The remaining three bits, labeled 'x' above, represent three more operation configuration parameters.
+The meaning of the four coordinate systems are described in the table below. Note that the "beam" coordinates is the most low-level as it does not include any additional processing from the raw values collected, while the "Earth" coordinates contain the most additional processing: the Earth frame account for pitch, roll, and heading alignment of the vehicle when reporting velocity values. 
 
-| EX-Cmd  | Description                                                       |
-| ---     | ---                                                               |
-| xx1xx   | Uses Pitch and Roll for computing Ship/Earth transformation       |
-| xxx1x   | Allows 3-beam velocity solution if one beam below threshold       |
-| xxxx1   | Allows bin-mapping (see manual for more details)                  |
-
-Example: `EX11111 = coordinate_transformation = 31`: earth coordinate transformation, with Pitch and Roll used for computing transformation, 3-beam velocity solution is allowed, and bin-mapping is allowed. Note, for Ship coordinate transformation and Earth coordinate transformation, the "Heading Alignment" and "Heading Bias" parameters must be set properly. 
+| Coord Sys | Vel 1     | Vel 2     | Vel 3     | Vel 4     |
+| ---       | ---       | ---       | ---       | ---       |
+| Beam      | Towards Beam1 | Towards Beam2 | Towards Beam3 | Towards Beam4   |
+| Instrument| Beam1-to-Beam2| Beam4-to-Beam3| To Transducer | Error Velocity  |
+| Ship      | Port-to-Starboard | Aft-to-Forward| To Surface| Error Velocity  |
+| Earth     | To East           | To West   | To surface    | Error Velocity  |
 
 
+
+<!---------------------------------------------->
 ### Variable Leader Fields 
 | Variable Name         | Units | Description                                 |
 | ---                   | :---: | ---                                         |
-| `speed_of_sound`      | [m/s] | either manual or calculated speed of sound  |
-| `depth_of_transducer` | [m]   | positive down, depth below water surface    |
-| `heading`             | [deg] | heading angle relative to coordinate frame  |
-| `pitch`               | [deg] | positive upwards                            |
-| `roll`                | [deg] | positive means glider is banking right      |
-| `salinity`            | [ppt] | measured at the transducer head             |
-| `temperature`         | [C]   | measured at the transducer head             |
+| `time`                | [UTC] | Gives the time at which the ensemble was collected by the Pathfinder DVL. For convenience, the time field is used as the index in the PathfinderTimeSeries DataFrame to make slicing by time-windows easy. |
+| `ensemble_number`     |       | Ensemble number for the given data file.    |
+| `bit_result`          |       |  Several settings are described here. To parse the information, the numerical value must be converted to binary and then each bit must be decoded. This variable reports the results of the built-in Pathfinder tests. |
+| `speed_of_sound`      | [m/s] | Manual or calculated speed of sound.        |
+| `depth_of_transducer` | [m]   | Depth below water surface (positive down).  |
+| `heading`             | [deg] | Heading angle.                              |
+| `pitch`               | [deg] | Pitch angle, positive means vehicle is tilted upwards. | 
+| `roll`                | [deg] | Roll angle, positive means glider is banking right. |
+| `salinity`            | [ppt] | Salinity measured at the transducer head.   |
+| `temperature`         | [C]   | Temperature measured at the transducer head.|
+| `pressure`            | [Pa]  | Pressure of water relative to 1 atm.        |
 
 
-### Water Profiling Fields 
+
+<!---------------------------------------------->
+### Derived Fields 
 | Variable Name         | Units | Description                                 |
 | ---                   | :---: | ---                                         |
-| `vel_cell#_beam#`     | [m/s] | velocity, depends on coordinate transform   |
-| `cor_cell#_beam#`     |       | linear scale of correlation mag (255 = best)|
-| `ech_cell#_beam#`     |       | echo intensity                              |
-| `per_cell#_beam#`     |       | percent good data quality indicator         n|
+| `rel_vel_pressure_u`  | [m/s] | X-component (Eastward) of through water velocity, derived by looking at change in pressure over time and heading reading from compass. |
+| `rel_vel_pressure_v`  | [m/s] | Y-component (Northward) of through water velocity, derived by looking at change in pressure over time and heading reading from compass. |
+| `rel_vel_dvl_u`       | [m/s] | X-component (Eastward) of through water velocity, given by the DVL. | 
+| `rel_vel_dvl_v`       | [m/s] | Y-component (Northward) of through water velocity, given by the DVL. | 
+| `abs_vel_btm_u`       | [m/s] | X-component (Eastward) of over ground velocity, given by the DVL operating in bottom-track mode. |
+| `abs_vel_btm_v`       | [m/s] | X-component (Eastward) of over ground velocity, given by the DVL operating in bottom-track mode. |
+| `abs_vel_w`           | [m/s] | Z-component (Vertical) of glider velocity, given by change in pressure over change in time. |
+| `delta_x`             | [m]   | Change in x-component of position since last ensemble. |
+| `delta_y`             | [m]   | Change in y-component of position since last ensemble. |
+| `delta_z`             | [m]   | Change in z-component of position since last ensemble. |
+| `delta_t`             | [s]   | Change in time since last ensemble. |
+| `rel_pos_x`           | [m]   | X-component of position relative to given origin point (if unspecified, origin is considered the <0,0,0> point). |
+| `rel_pos_y`           | [m]   | Y-component of position relative to given origin point (if unspecified, origin is considered the <0,0,0> point). |
+| `rel_pos_z`           | [m]   | Z-component of position relative to given origin point (if unspecified, origin is considered the <0,0,0> point). |
+| `origin_x`            | [UTM] | X-component of origin point for defining the relative coordinate frame. |
+| `origin_y`            | [UTM] | X-component of origin point for defining the relative coordinate frame. |
+| `angle_of_attack`     | [deg] | Angle of attack of the glider, currently assumed to be zero for simplicity. |
 
 
+
+<!---------------------------------------------->
+### Water Profiling Fields 
+
+Note that the interpretation of the water-profiling fields is dependent on the coordinate transformation being used. For example, in Earth coordinates the first beam (`vel_bin#_beam0`) refers to the Eastward velocity component and the second beam (`vel_bin#_beam1`) refers to the Northward velocity component. It is also important to note that the data fields are indexed from zero while the physical beams are indexed from 1. 
+
+| Variable Name         | Units | Description                                 |
+| ---                   | :---: | ---                                         |
+| `vel_bin#_beam#`      | [m/s] | Velocity.                                   |
+| `cor_bin#_beam#`      |       | Linear scale of correlation magnitude (255 = best). |
+| `ech_bin#_beam#`      | [dB]  | Echo intensity                              |
+| `per_bin#_beam#`      |       | Percent good data quality indicator.        |
+
+
+<!---------------------------------------------->
 ### Bottom Track Fields 
 | Variable Name               | Units | Description | 
 | ---                         | :---: | --- |
-| `btm_beam#_range`           | unit  | bottom track vertical range (NOT slant range) to detected bottom (0 = not detected)does not take into account pitch/roll  |
-| `btm_beam#_velocity`        | unit  | bottom track velocity, meaning depends on `coordinate_transformation` |
-| `btm_beam#_correlation`     | unit  | des |
-| `btm_beam#_echo_intensity`  | unit  | des |
-| `btm_beam#_percent_good`    | unit  | des |
-| `btm_beam#_rssi`            | unit  | des |
-| `btm_bottom_track_mode`     | unit  | des |
-| `btm_max_tracking_depth`    | unit  | des |
+| `btm_beam#_range`           | [m]   | Bottom track vertical range (NOT slant range) to the detected bottom, does not take into account the effects of pitch and roll. A value of zero indicates that the bottom was not detected. |
+| `btm_beam#_velocity`        | [m/s] | Bottom track velocity, meaning depends on `coordinate_transformation`. |
+| `btm_beam#_rssi`            | [dB]  | Receiver Signal Strength Indicator (RSSI) value in the center of the bottom echo for each beam. |
+| `btm_pings_per_ensemble`    |       | Number of pings averaged together per ensemble. |
+| `btm_bottom_track_mode`     |       | Bottom-tracking mode.  |
+| `btm_max_error_velocity`    | [m/s] | Maximum error velocity | 
 
 
-
-<!---------------------------------------------->
-## Helpful Commands 
-- `python -m cProfile -s tottime simul.py`
-  - run Python profiler over function
-
-
-
-<!---------------------------------------------->
+<!---------------------------------------------------------------------------->
 ## Miscellaneous Notes
+- `python -m cProfile -s tottime simul.py` -- terminal command that runs Python profiler over function and provides extensive information about how many times each sub-method is called and how long each sub-method takes to execute. 
 - Whenever possible, numpy or pandas vectorized operations should be used. In order of fastest to slowest: numpy vectorized functions, pandas vectorized functions, lambda functions, pandas built-in loop, python standard loop. Looping over pandas objects should be avoided at all costs.  
   - [Towards Data Science: How to make your pandas loop 71,803 times faster](https://towardsdatascience.com/how-to-make-your-pandas-loop-71-803-times-faster-805030df4f06)
   - [Medium: A Beginner’s Guide to Optimizing Pandas Code for Speed](https://engineering.upside.com/a-beginners-guide-to-optimizing-pandas-code-for-speed-c09ef2c6a4d6)
 - the best way to incrementally build a numpy array, without knowing the final array size ahead of time, is to append numpy array rows to a python list and then cast the list into a 2D numpy array at the end. Using the `np.concatenate()` or `numpy.append()` functions are much slower. One downside of casting a python list to a numpy array is that both the list and array will be stored in memory at the same time. 
   - [Stack Overflow: Best way to incrementally build a numpy array](https://stackoverflow.com/questions/30468454/what-is-the-best-way-to-incrementally-build-a-numpy-array)
 
-
-<!---------------------------------------------->
-## List of TODOs
-
-### General TODOs
-- add parent class `PathfinderDVL` that defines variable names, derived variables, etc. (similar to Micron sonar)
-- add "save compressed version" that does not include echo intensities, percent-good, bottom-track, etc. -- only the most relevant information in a small number of columns (add a flag for only considering the "compressed version of the data")
-- change "cell" to "bin" -- will be easier to read
-
-### `pd0_reader.py`
-- try combing data from multiple files -- think about timestamps organization 
-
-### `pd0_plotter.ipynb`
-- IPython notebook for plotting DVL data -- notebook format encourages interaction with data visualization processing (and ensures that glider scripts are not burdened with any processing functions)
-
-### `PathfinderEnsemble.py`
-- make "get_data" function that is more similar to the micron sonar function
-- remove the code that calls the `setattr` function (use get_data instead)
-- better documentation about how to use the software 
-- turn this into a sub-method: # store parsed values in the data array 
-- change name of velocity variables? (instead of beam1, beam2, etc., could use velocity1, velocity2, etc. which may be less confusing because only one of the four coordinate system options includes velocities along the beam axis)
-- think about what data-fields will be needed for on-board processing (not everything will be required and we want to be as light weight as possible)
-- add another dict attribute that keeps track of units?
-- determine how to access some of the more relevant variables from fixed_leader (i.e. coordinate_transformation, etc.) the answer might just be to do all the necessary parsing and transformation before saving to csv file format. Alternatively, can include the fixed leader variables in the ensemble itself.
-- add some of the fixed-leader variables to the dataframe (when combining multiple missions it is possible that these would change over-time, i.e. if the backseat driver sends a command to the DVL during the mission)
-
-### `PathfinderTimeSeries.py`
-- encode various navigation functions (review Rich Matlab code for this)
-- test ensemble rollover works in case when 65535 ensembles occur
-- add additional class method constructors (checkout MicronTimeSeries)
-  - add 'from_csv'
-  - add 'from_csv_directory'
-  - add 'from_frames'
-  - note this is more complicated than the MicronSonar example because need to keep track of previous ensemble references 

@@ -59,6 +59,46 @@ class PathfinderTimeSeries(PathfinderDVL):
         return self._df
 
 
+    def add_ensemble(self, ensemble):
+        """Adds a DVL Pathfinder ensemble to the growing list of ensembles.
+
+        Args: 
+            ensemble: a Micron Sonar ensemble  
+        """
+        self._ensemble_list.append(ensemble.data_array)
+
+
+    def to_dataframe(self):
+        """Converts the current list of ensembles into a DataFrame.
+
+        Note: calling this function will invoke pd.concat(), which creates a 
+        copy of the whole DataFrame in memory. As a result, if this function 
+        is called many times, there will be significant slowdown. Instead,
+        consider collecting ensembles into the ensemble_list until a suitable 
+        number of ensembles have been collected, and then intermittently call 
+        the to_dataframe function.
+        """
+        # convert available ensembles to DataFrame
+        if self.ensemble_list:
+            ts      = np.array(self.ensemble_list)
+            cols    = self.label_list
+            t_index = self.data_lookup['time']
+            t       = ts[:,t_index]
+            index   = pd.DatetimeIndex([datetime.fromtimestamp(v) for v in t])
+            new_df  = pd.DataFrame(data=ts, index=index, columns=cols)
+
+            # concatenate new ensembles with existing DataFrame if possible
+            if self.df is None:
+                self._df = new_df
+            else:
+                self._df = pd.concat([self.df, new_df])
+
+            # reset the ensemble list once added to the DataFrame
+            self._ensemble_list = []
+        else:
+            print("WARNING: No ensembles to add to DataFrame.")
+
+
     @classmethod
     def from_pd0(cls, filepath, save, verbose=True):
         """Parses DVL Time Series from given pd0 file. 
@@ -134,46 +174,6 @@ class PathfinderTimeSeries(PathfinderDVL):
             ensemble.parse_coordinate_transformation()
      
         return(time_series)
-
-
-    def add_ensemble(self, ensemble):
-        """Adds a DVL Pathfinder ensemble to the growing list of ensembles.
-
-        Args: 
-            ensemble: a Micron Sonar ensemble  
-        """
-        self._ensemble_list.append(ensemble.data_array)
-
-
-    def to_dataframe(self):
-        """Converts the current list of ensembles into a DataFrame.
-
-        Note: calling this function will invoke pd.concat(), which creates a 
-        copy of the whole DataFrame in memory. As a result, if this function 
-        is called many times, there will be significant slowdown. Instead,
-        consider collecting ensembles into the ensemble_list until a suitable 
-        number of ensembles have been collected, and then intermittently call 
-        the to_dataframe function.
-        """
-        # convert available ensembles to DataFrame
-        if self.ensemble_list:
-            ts      = np.array(self.ensemble_list)
-            cols    = self.label_list
-            t_index = self.data_lookup['time']
-            t       = ts[:,t_index]
-            index   = pd.DatetimeIndex([datetime.fromtimestamp(v) for v in t])
-            new_df  = pd.DataFrame(data=ts, index=index, columns=cols)
-
-            # concatenate new ensembles with existing DataFrame if possible
-            if self.df is None:
-                self._df = new_df
-            else:
-                self._df = pd.concat([self.df, new_df])
-
-            # reset the ensemble list once added to the DataFrame
-            self._ensemble_list = []
-        else:
-            print("WARNING: No ensembles to add to DataFrame.")
 
 
     def save_as_csv(self, name=None, directory='./'):

@@ -333,7 +333,7 @@ class PathfinderEnsemble(PathfinderDVL):
                 self.set_data(key, fixed_leader[key])
 
         # convert relevant fields to standard metric quantities
-        self.convert_to_metric('depth_cell_length',       self.CM_TO_M)
+        self.convert_to_metric('depth_bin_length',        self.CM_TO_M)
         self.convert_to_metric('blanking_distance',       self.CM_TO_M)
         self.convert_to_metric('error_velocity_threshold',self.MM_TO_M)
         self.convert_to_metric('heading_alignment',       self.HUNDRETH_TO_DEG)
@@ -391,6 +391,11 @@ class PathfinderEnsemble(PathfinderDVL):
             if key in self.label_set:
                 self.set_data(key, variable_leader[key])
 
+        # compute ensemble number while accounting for ensemble roll over 
+        self.set_data('ensemble_number', variable_leader['ensemble_number'] + \
+                        self.MAX_ENS_NUM*variable_leader['ensemble_rollover'])
+
+        # convert data to metric values when applicable 
         self.convert_to_metric('depth',                   self.DM_TO_M)
         self.convert_to_metric('heading',                 self.HUNDRETH_TO_DEG)
         self.convert_to_metric('pitch',                   self.HUNDRETH_TO_DEG)
@@ -696,5 +701,4 @@ class PathfinderEnsemble(PathfinderDVL):
             print('    ' + coord_frame_set)
 
         return coord_frame_set
-
 

@@ -30,6 +30,7 @@ class PathfinderDVL(object):
         self.NUM_BINS_EXP  = 40      # expected number of bins (or cells)
         self.BAD_VELOCITY  = -32768  # value that represents invalid velocity 
         self.BAD_BT_RANGE  = 0       # value that represents invalid range
+        self.MAX_ENS_NUM   = 65536   # max number of ensembles before rollover
 
         # map from each variable group name to three letter abbreviation 
         self._data_abbreviations = {
@@ -103,7 +104,7 @@ class PathfinderDVL(object):
             ('num_beams',                       'B',     8),
             ('num_bins',                        'B',     9),
             ('pings_per_ensemble',              '<H',   10),
-            ('depth_cell_length',               '<H',   12),    # [cm]
+            ('depth_bin_length',                '<H',   12),    # [cm]
             ('blanking_distance ',              '<H',   14),    # [cm]
             ('profiling_mode',                  'B',    16),
             ('low_correlation_threshold',       'B',    17),
@@ -134,7 +135,7 @@ class PathfinderDVL(object):
             'num_beams',
             'num_bins', 
             'pings_per_ensemble',
-            'depth_cell_length',
+            'depth_bin_length',
             'blanking_distance',
             'low_correlation_threshold',
             'percent_good_minimum',
@@ -162,10 +163,10 @@ class PathfinderDVL(object):
             ('rtc_minute',                      'B',     8),
             ('rtc_second',                      'B',     9),
             ('rtc_hundredths',                  'B',    10),
-            ('ensemble_roll_over',              'B',    11),
+            ('ensemble_rollover',               'B',    11),
             ('bit_result',                      '<H',   12),
             ('speed_of_sound',                  '<H',   14),    # [m/s]
-            ('depth',             '<H',   16),    # [dm]
+            ('depth',                           '<H',   16),    # [dm]
             ('heading',                         '<H',   18),    # [0.01 deg]
             ('pitch',                           '<h',   20),    # [0.01 deg]
             ('roll',                            '<h',   22),    # [0.01 deg]
@@ -198,7 +199,6 @@ class PathfinderDVL(object):
             'rtc_minute',
             'rtc_second',
             'rtc_hundredths',
-            'ensemble_roll_over',
             'bit_result',
             'speed_of_sound',
             'depth',
