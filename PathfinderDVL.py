@@ -50,22 +50,26 @@ class PathfinderDVL(object):
         #     added, make sure to implement the corresponding parsing function
         #     to the 'PathfinderEnsemble.parse_derived_variables()' function
         self._derived = (
-            # relative velocities
+            # relative velocities (through water velocities)
             'rel_vel_pressure_u',
             'rel_vel_pressure_v',
+            'rel_vel_pressure_w',
             'rel_vel_dvl_u',
             'rel_vel_dvl_v',
+            'rel_vel_dvl_w',
 
-            # absolute velocities 
+            # absolute velocities (over ground velocities)
             'abs_vel_btm_u',
             'abs_vel_btm_v',
-            'abs_vel_w',
+            'abs_vel_btm_w',
 
             # positions
             'delta_x',
             'delta_y',
             'delta_z',
             'delta_t',
+            'delta_z_pressure',
+            'delta_pitch',
             'rel_pos_x',
             'rel_pos_y',
             'rel_pos_z',

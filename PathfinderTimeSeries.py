@@ -113,11 +113,12 @@ class PathfinderTimeSeries(PathfinderDVL):
 
         # open the file 
         pd0_file = open(filepath, 'rb').read()
+        filename = filepath.split('/')[-1]
         count = 0
         if verbose:
             print('________________________________________')
-            print('- Parsing New File ---------------------')
-            print('    input file: %s' % (filepath,))
+            print('- Parsing DVL File ---------------------')
+            print('    input file: %s' % (filename,))
             parse_start = time.time()
 
         # initialize the time series object

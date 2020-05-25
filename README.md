@@ -6,9 +6,16 @@
 
 <!-----------------------------------------------
 Most Recent Changes:
-- improve documentation
+- add rotation to handle pitch and roll bias of DVL mounting
+- avoid vertical speed calculation when depth not updated
+- second bin now being used for DVL through water velocity
 
 Changes Before Commit: 
+
+Future TODOs
+- add a "glider" file that has bias parameter information 
+- implement SlocumScienceController
+- add ability to include Slocum data in the Pathfinder time series
 ------------------------------------------------>
 
 
@@ -34,7 +41,7 @@ There are three Pathfinder object classes implemented in this repository:
   - [Fixed Leader Fields](#fixed-leader-fields)
   - [Variable Leader Fields](#variable-leader-fields)
   - [Derived Fields](#derived-fields)
-  - [Water Profiling Fields](#water-profilingp-fields)
+  - [Water Profiling Fields](#water-profiling-fields)
   - [Bottom Track Fields](#bottom-track-fields)
 - [Miscellaneous Notes](#miscellaneous-notes)
 
@@ -136,7 +143,7 @@ The meaning of the four coordinate systems are described in the table below. Not
 | Beam      | Towards Beam1 | Towards Beam2 | Towards Beam3 | Towards Beam4   |
 | Instrument| Beam1-to-Beam2| Beam4-to-Beam3| To Transducer | Error Velocity  |
 | Ship      | Port-to-Starboard | Aft-to-Forward| To Surface| Error Velocity  |
-| Earth     | To East           | To West   | To surface    | Error Velocity  |
+| Earth     | To East           | To West   | To Surface    | Error Velocity  |
 
 
 

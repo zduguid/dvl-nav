@@ -118,6 +118,12 @@ class SlocumFlightController(object):
     @property
     def ensemble_list(self):
         return self._ensemble_list
+        
+
+    def get_var_unit(self, var_name):
+        """Return the units associated with the var name
+        """
+        return(self.var_units[self.var_dict[var_name]])
 
 
     def add_ensemble(self, ensemble):

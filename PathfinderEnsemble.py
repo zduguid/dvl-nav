@@ -118,12 +118,6 @@ class PathfinderEnsemble(PathfinderDVL):
         if attribute: setattr(self, var, val)    
 
 
-    def convert_to_metric(self, variable, multiplier, attribute=True):
-        """Converts variable to standard metric value using the multiplier"""
-        value = self.get_data(variable) 
-        self.set_data(variable, value * multiplier, attribute)
-
-
     def parse_ensemble(self, pd0_bytes):
         """Parses an ensemble from pd0 bytes.
 
@@ -201,62 +195,6 @@ class PathfinderEnsemble(PathfinderDVL):
                                                  pd0_bytes,
                                                  var_offset)[0]
         return(data)
-
-
-    def validate_checksum(self, pd0_bytes):
-        """Validates the checksum for the ensemble.
-        """
-        calc_checksum  = sum([c for c in pd0_bytes[:self.num_bytes]]) & 0xFFFF
-        given_checksum = struct.unpack_from('<H', pd0_bytes, self.num_bytes)[0]
-        if calc_checksum != given_checksum:
-            raise PathfinderChecksumError(calc_checksum, given_checksum)
-
-
-    def parse_beams(self, pd0_bytes, offset, num_bins, num_beams, var_format, 
-        var_name):
-        """Parses beams of DVL data.
-        
-        Velocity, correlation mag, echo intensity, and percent good data types
-        report values per depth cell per beam. For example, with 4 beams
-        and 40 depth cell bins, there are 160 velocity values reported 
-        (each value being encoded with two bytes, unlike the other fields).
-
-        Args:
-            pd0_bytes: pd0 bytes to be parsed into the fixed leader data type.
-            offset: byte offset to start parsing the fixed leader. 
-            num_bins: number of depth cells on DVL (user setting).
-            num_beams: number of beams on the DVL (fixed at 4).
-            var_format: Format String for the variable being parsed for each
-                beam. For example var_format = 'h' means type short.
-            var_name: name of the variable being parsed (i.e. 'velocity')
-        """
-        var_size = struct.calcsize(var_format)
-
-        # only parse velocity water profile data to save processing time
-        if var_name == 'velocity':
-
-            # parse data for each depth cell 
-            for bin_num in range(num_bins):
-                bin_start = offset + bin_num*num_beams*var_size
-
-                # parse data for each beam for a given depth cell 
-                for beam_num in range(num_beams):
-                    beam_start = bin_start + beam_num*var_size
-                    data_val   = struct.unpack_from(var_format, 
-                                                    pd0_bytes, 
-                                                    beam_start)[0]
-
-                    # compute labels and array index 
-                    label = self.get_profile_var_name(var_name, 
-                                                      bin_num, 
-                                                      beam_num)
-
-                    # set NaNs for bad velocity values, else convert to metric
-                    if (var_name == 'velocity') and \
-                       (data_val == self.BAD_VELOCITY):
-                        self.set_data(label, np.NaN)
-                    else:
-                        self.set_data(label, data_val*self.MM_TO_M)
 
 
     def parse_header(self, pd0_bytes):
@@ -456,6 +394,10 @@ class PathfinderEnsemble(PathfinderDVL):
             name: the name of the data type (name = 'bottom_track')
             offset: byte offset to start parsing the bottom track 
         """
+        # labels for (u,v,w) components of velocity
+        label_u = 'btm_beam0_velocity'
+        label_v = 'btm_beam1_velocity'
+        label_w = 'btm_beam2_velocity'
         bottom_track = self.unpack_bytes(pd0_bytes,
                                          self.bottom_track_format,
                                          offset)
@@ -493,6 +435,15 @@ class PathfinderEnsemble(PathfinderDVL):
         self.convert_to_metric('btm_beam2_rssi',         self.COUNT_TO_DB)
         self.convert_to_metric('btm_beam3_rssi',         self.COUNT_TO_DB)
 
+        # fix velocity 
+        u0    = self.get_data(label_u)
+        v0    = self.get_data(label_v) 
+        w0    = self.get_data(label_w)
+        u,v,w = self.apply_mounting_bias_rotations((u0,v0,w0))
+        self.set_data(label_u, u)
+        self.set_data(label_v, v)
+        self.set_data(label_w, w)
+ 
 
     def parse_derived_variables(self):
         """Computes the derived variables specified in PathfinderDVL.
@@ -501,7 +452,10 @@ class PathfinderEnsemble(PathfinderDVL):
         """
         # check that the DVL is reporting data in earth coordinates
         EARTH_FRAME = 'Earth Coords'
-        EPSILON     = 1e-5
+        MIN_PITCH   = 0.001
+        EPSILON     = 0.001
+        MAX_SPEED   = 1.3 
+
         coordinate_frame = self.parse_coordinate_transformation(verbose=False)
         if coordinate_frame != EARTH_FRAME:
             raise ValueError('Bad coord frame: expected = %s, actual = %s' % 
@@ -513,75 +467,255 @@ class PathfinderEnsemble(PathfinderDVL):
         # previous ensemble not given
         #   + assume beginning of dive
         if not self.prev_ensemble:
-
             # set origin to (0,0) if not specified
             if not self.gps_fix:
-                self.set_data('origin_x', 0)
-                self.set_data('origin_y', 0)
+                self.set_data('origin_x',  0)
+                self.set_data('origin_y',  0)
+            # otherwise set origin to GPS fix 
+            else:
+                self.set_data('origin_x',  self.gps_fix[0])
+                self.set_data('origin_y',  self.gps_fix[0])
+            return
 
-        # otherwise extract information from the previous ensemble 
-        else:
+        # extract position information from previous ensemble 
+        prev_origin_x  = self.prev_ensemble.get_data('origin_x')
+        prev_origin_y  = self.prev_ensemble.get_data('origin_y')
+        prev_rel_pos_x = self.prev_ensemble.get_data('rel_pos_x')
+        prev_rel_pos_y = self.prev_ensemble.get_data('rel_pos_y')
+        prev_rel_pos_z = self.prev_ensemble.get_data('rel_pos_z')
+        prev_depth     = self.prev_ensemble.get_data('depth')
+        prev_pitch     = self.prev_ensemble.get_data('pitch')
+        prev_t         = self.prev_ensemble.get_data('time') 
 
-            # extract position information from previous ensemble 
-            prev_rel_pos_x = self.prev_ensemble.get_data('rel_pos_x')
-            prev_rel_pos_y = self.prev_ensemble.get_data('rel_pos_y')
-            prev_rel_pos_z = self.prev_ensemble.get_data('rel_pos_z')
-            prev_t         = self.prev_ensemble.get_data('time') 
+        # helper function for setting DVL velocity based on bin number
+        def set_dvl_rel_velocities(bin_num):
+            u_var = self.get_profile_var_name('velocity', bin_num, 0)
+            v_var = self.get_profile_var_name('velocity', bin_num, 1)
+            w_var = self.get_profile_var_name('velocity', bin_num, 2)
+            self.set_data('rel_vel_dvl_u', -self.get_data(u_var))
+            self.set_data('rel_vel_dvl_v', -self.get_data(v_var))
+            self.set_data('rel_vel_dvl_w',  self.get_data(w_var))
 
-            # compute through water velocity from pressure method
-            self.set_data('rel_pos_z',  self.depth)
-            self.set_data('delta_z',    self.rel_pos_z - prev_rel_pos_z)
-            self.set_data('delta_t',    self.time      - prev_t)
-            self.set_data('abs_vel_w',  self.delta_z/self.delta_t)
+        # helper function for setting bottom track velocities
+        def set_btm_abs_velocities():
+            self.set_data('abs_vel_btm_u', -self.btm_beam0_velocity)
+            self.set_data('abs_vel_btm_v', -self.btm_beam1_velocity)
+            self.set_data('abs_vel_btm_w',  self.btm_beam2_velocity)
+    
+        # helper function to update relative position 
+        def update_position(vel_label):
+            vel_options = ['rel_vel_dvl','rel_vel_pressure','abs_vel_btm']
+            if vel_label not in vel_options:
+                raise ValueError('bad velocity source: %s' % (vel_label))
+            # update relative position using bottom track velocity 
+            self.set_data('delta_x',self.delta_t*self.get_data(vel_label+'_u'))
+            self.set_data('delta_y',self.delta_t*self.get_data(vel_label+'_v'))
+            self.set_data('delta_z',self.delta_t*self.get_data(vel_label+'_w'))
+            self.set_data('rel_pos_x', prev_rel_pos_x + self.delta_x)
+            self.set_data('rel_pos_y', prev_rel_pos_y + self.delta_y)
+            self.set_data('rel_pos_z', prev_rel_pos_z + self.delta_z_pressure)
 
-            # computer horizontal velocity in relative frame 
-            #   + avoid division by zero
-            if abs(self.pitch) < EPSILON:
-                if self.pitch < 0:
-                    pitch = -EPSILON
-                else:
-                    pitch =  EPSILON
-            else:                         
-                pitch = self.pitch
+        # helper function for assessing if bottom track data is valid
+        def valid_bottom_track():
+            return(not np.isnan(self.get_data('btm_beam0_velocity')))
 
-            # compute relative horizontal velocities using pressure and compass
-            rel_vel_h = self.abs_vel_w/np.tan(-pitch*self.DEG_TO_RAD)
+        def valid_bin_num(bin_num):
+            var_name = self.get_profile_var_name('velocity', bin_num, 0)
+            return(not np.isnan(self.get_data(var_name)))
+
+        # compute through water velocity from pressure method
+        self.set_data('delta_t',          self.time  - prev_t)
+        self.set_data('delta_z_pressure', self.depth - prev_depth)
+        self.set_data('delta_pitch',      self.pitch - prev_pitch)
+
+        # computer horizontal velocity in relative frame 
+        #   + avoid division by zero
+        if (np.abs(self.pitch) > MIN_PITCH) and \
+            (np.abs(self.get_data('delta_z_pressure')) > EPSILON):
+            
+            # through water velocity from change in pressure and compass
+            self.set_data('rel_vel_pressure_w', 
+                        self.delta_z_pressure/self.delta_t)
+
+            # horizontal velocity depends on pitch value
+            rel_vel_h = self.rel_vel_pressure_w / \
+                        np.tan(-self.pitch*self.DEG_TO_RAD)
+
             rel_vel_u = rel_vel_h*np.sin(self.heading*self.DEG_TO_RAD)
             rel_vel_v = rel_vel_h*np.cos(self.heading*self.DEG_TO_RAD)
             self.set_data('rel_vel_pressure_u', rel_vel_u)
             self.set_data('rel_vel_pressure_v', rel_vel_v)
 
-            # book-keep through water velocity measured by DVL
-            self.set_data('rel_vel_dvl_u', -self.vel_bin0_beam0)
-            self.set_data('rel_vel_dvl_v', -self.vel_bin0_beam1)
+        # set pressure through water velocities to NaN otherwise
+        else:
+            self.set_data('rel_vel_pressure_u', np.NaN)
+            self.set_data('rel_vel_pressure_v', np.NaN)
+            self.set_data('rel_vel_pressure_w', np.NaN)
 
-            # book-keep bottom track velocity if we have it  
-            if not np.isnan(self.get_data('btm_beam0_velocity')):
-                self.set_data('abs_vel_btm_u', -self.btm_beam0_velocity)
-                self.set_data('abs_vel_btm_v', -self.btm_beam1_velocity)
+        # select DVL bin for through-water velocity 
+        #   + first two bins are less accurate in steady state conditions
+        #   + bins further away are more likely to have random outliers
+        for i in [2,1,0]:
+            if valid_bin_num(i) and self.get_speed(i) < MAX_SPEED:
+                set_dvl_rel_velocities(i)
+                break           
 
-                # update relative position using bottom track velocity 
-                self.set_data('delta_x',   self.delta_t*self.abs_vel_btm_u)
-                self.set_data('delta_y',   self.delta_t*self.abs_vel_btm_v)
-                self.set_data('rel_pos_x', prev_rel_pos_x + self.delta_x)
-                self.set_data('rel_pos_y', prev_rel_pos_y + self.delta_y)
+        # set bottom-track velocities (even if NaN)
+        set_btm_abs_velocities()
 
-            else:
-                # otherwise update relative position using relative velocities
-                self.set_data('delta_x', self.delta_t*self.rel_vel_dvl_u)
-                self.set_data('delta_y', self.delta_t*self.rel_vel_dvl_v)
-                self.set_data('rel_pos_x', prev_rel_pos_x + self.delta_x)
-                self.set_data('rel_pos_y', prev_rel_pos_y + self.delta_y)
-                self.set_data('abs_vel_btm_u', np.NaN)
-                self.set_data('abs_vel_btm_v', np.NaN)
-
+        # update relative position using bottom track velocity or DVL velocity
+        if valid_bottom_track():
+            update_position('abs_vel_btm')
+        else:
+            update_position('rel_vel_dvl')
+        
         # update origin and relative position if GPS fix is given
         if self.gps_fix:
-            self.set_data('origin_x',  self.gps_fix[0])
-            self.set_data('origin_y',  self.gps_fix[0])
+            self.set_data('origin_x', self.gps_fix[0])
+            self.set_data('origin_y', self.gps_fix[0])
             self.set_data('rel_pos_x', 0)
             self.set_data('rel_pos_y', 0)
-            self.set_data('rel_pos_z', self.depth)
+            self.set_data('rel_pos_z', 0)
+        else:
+            self.set_data('origin_x', prev_origin_x)
+            self.set_data('origin_y', prev_rel_pos_y)
+
+
+    def get_speed(self, bin_num):
+        """Returns the magnitude of velocity given a bin number
+
+        Args:
+            bin_num: the bin number to compute the speed vector
+        """
+        x,y,z = 0,1,2
+        u = self.get_data(self.get_profile_var_name('velocity', bin_num, x))
+        v = self.get_data(self.get_profile_var_name('velocity', bin_num, y))
+        w = self.get_data(self.get_profile_var_name('velocity', bin_num, z))
+        return(np.linalg.norm([u,v,w]))
+
+
+    def convert_to_metric(self, variable, multiplier, attribute=True):
+        """Converts variable to standard metric value using the multiplier"""
+        value = self.get_data(variable) 
+        self.set_data(variable, value * multiplier, attribute)
+        
+
+    def validate_checksum(self, pd0_bytes):
+        """Validates the checksum for the ensemble.
+        """
+        calc_checksum  = sum([c for c in pd0_bytes[:self.num_bytes]]) & 0xFFFF
+        given_checksum = struct.unpack_from('<H', pd0_bytes, self.num_bytes)[0]
+        if calc_checksum != given_checksum:
+            raise PathfinderChecksumError(calc_checksum, given_checksum)
+
+
+    def apply_mounting_bias_rotations(self, velocity0):
+        """Rotates velocity vector to account for mounting bias.
+
+        Assumes that velocity data is in Earth Coordinate frame.
+
+        Args:
+            velocity0: (u0,v0,w0) velocity vector recorded by instrument.
+
+        Returns: (u,v,w) velocity vector in desired coordinate frame.
+        """
+        BIAS_PITCH   =  8  # [deg]
+        BIAS_ROLL    = -1  # [deg]
+        BIAS_HEADING =  0  # [deg]
+        u0,v0,w0     = velocity0
+        Velocity_e0  = np.array([[u0],[v0],[w0]])
+
+        # orthogonal transformation matrices 
+        def Qx(phi):
+            return(np.array([[           1,            0,            0],
+                             [           0,  np.cos(phi), -np.sin(phi)],
+                             [           0,  np.sin(phi),  np.cos(phi)]]))
+        def Qy(phi):
+            return(np.array([[ np.cos(phi),            0,  np.sin(phi)],
+                             [           0,            1,            0],
+                             [-np.sin(phi),            0,  np.cos(phi)]]))
+        def Qz(phi):
+            return(np.array([[ np.cos(phi), -np.sin(phi),            0],
+                             [ np.sin(phi),  np.cos(phi),            0],
+                             [           0,            0,            1]]))
+
+        # rotate from Earth Coords <E,N,U> to Ship Coords <S,F,U>
+        head = (self.heading-BIAS_HEADING)*self.DEG_TO_RAD
+        pitc = BIAS_PITCH*self.DEG_TO_RAD        
+        roll = BIAS_ROLL*self.DEG_TO_RAD
+        Velocity_s    = np.dot(Qz( head), Velocity_e0)
+        Velocity_s_p  = np.dot(Qx( pitc), Velocity_s)
+        Velocity_s_pr = np.dot(Qy( roll), Velocity_s_p)
+        Velocity_e    = np.dot(Qz(-head), Velocity_s_pr)
+        u,v,w         = Velocity_e.flatten()
+        return(u,v,w)
+
+
+    def parse_beams(self, pd0_bytes, offset, num_bins, num_beams, var_format, 
+        var_name):
+        """Parses beams of DVL data.
+        
+        Velocity, correlation mag, echo intensity, and percent good data types
+        report values per depth cell per beam. For example, with 4 beams
+        and 40 depth cell bins, there are 160 velocity values reported 
+        (each value being encoded with two bytes, unlike the other fields).
+
+        Args:
+            pd0_bytes: pd0 bytes to be parsed into the fixed leader data type.
+            offset: byte offset to start parsing the fixed leader. 
+            num_bins: number of depth cells on DVL (user setting).
+            num_beams: number of beams on the DVL (fixed at 4).
+            var_format: Format String for the variable being parsed for each
+                beam. For example var_format = 'h' means type short.
+            var_name: name of the variable being parsed (i.e. 'velocity')
+        """
+        # assumes that last beam is an error velocity, meaning velocity is not
+        # reported in beam coordinates 
+        ERROR_BEAM_NUM = 3
+        beam_u = 0
+        beam_v = 1
+        beam_w = 2
+        var_size  = struct.calcsize(var_format)
+        velocity0 = []
+
+        # only parse velocity water profile data to save processing time
+        if var_name == 'velocity':
+
+            # parse data for each depth cell 
+            for bin_num in range(num_bins):
+                bin_start = offset + bin_num*num_beams*var_size
+
+                # parse data for each beam for a given depth cell 
+                velocity0  = []
+                for beam_num in range(num_beams):
+                    beam_start = bin_start + beam_num*var_size
+                    data_val   = struct.unpack_from(var_format, 
+                                                    pd0_bytes, 
+                                                    beam_start)[0]
+
+                    # compute labels and array index 
+                    label = self.get_profile_var_name(var_name, 
+                                                      bin_num, 
+                                                      beam_num)
+
+                    # filter out bad velocity values 
+                    if (var_name == 'velocity'):
+                        if (data_val == self.BAD_VELOCITY):
+                            self.set_data(label, np.NaN)
+                        elif (beam_num != ERROR_BEAM_NUM):
+                            velocity0.append(data_val*self.MM_TO_M)
+                        else: 
+                            self.set_data(label, data_val*self.MM_TO_M)
+
+                # rotate velocity vector to account for pitch bias
+                if velocity0:
+                    u,v,w  = self.apply_mounting_bias_rotations(velocity0)
+                    xlabel = self.get_profile_var_name(var_name,bin_num,beam_u)
+                    ylabel = self.get_profile_var_name(var_name,bin_num,beam_v)
+                    zlabel = self.get_profile_var_name(var_name,bin_num,beam_w)
+                    self.set_data(xlabel, u)
+                    self.set_data(ylabel, v)
+                    self.set_data(zlabel, w)
 
 
     def parse_system_configuration(self, verbose=True):
