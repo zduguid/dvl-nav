@@ -101,29 +101,77 @@ def plot_odometry(ts, glider, save_name=None):
 ###############################################################################
 # PLOT ODOMETRY (DEAD-RECKONED)
 ###############################################################################
-def plot_m_odometry_dr(ts_g, glider, save_name=None):
+def plot_m_odometry_dr(ts_flight, glider, save_name=None):
     sns.set(font_scale = 1.5)
     fig, ax = plt.subplots(figsize=(10,8))
     sns.scatterplot(
-        ts_g.df.m_gps_fix_x_lmc, 
-        ts_g.df.m_gps_fix_y_lmc, 
+        ts_flight.df.m_gps_fix_x_lmc, 
+        ts_flight.df.m_gps_fix_y_lmc, 
         marker='X',
         color='tab:red', 
         s=300
     )
     sns.scatterplot(
-        x=ts_g.df.m_x_lmc,
-        y=ts_g.df.m_y_lmc,
+        x=ts_flight.df.m_x_lmc,
+        y=ts_flight.df.m_y_lmc,
         palette='viridis_r',
-        hue=ts_g.df.m_depth,
+        hue=ts_flight.df.m_depth,
         linewidth=0,
         s=10,
-        data=ts_g.df
+        data=ts_flight.df
     )
     dt = datetime.datetime.fromtimestamp(
-        ts_g.df.m_present_time[0]).replace(microsecond=0)
+        ts_flight.df.m_present_time[0]).replace(microsecond=0)
     plt.axis('equal')
     plt.suptitle('Dead Reckoned Trajectory', fontweight='bold')
+    plt.title('%s Kolumbo Volcano %s' % (unit_name[glider], dt.isoformat(),))
+    plt.xlabel('x position [m]')
+    plt.ylabel('y position [m]')
+    if save_name: plt.savefig(save_name)
+    else:         plt.savefig('/Users/zduguid/Desktop/fig/tmp.png')
+
+
+###############################################################################
+# PLOT ODOMETRY AND DEAD-RECKONED
+###############################################################################
+def plot_odometry_and_dr(df, glider, save_name=None):
+    sns.set(font_scale = 1.5)
+    fig, ax = plt.subplots(figsize=(10,8))
+    sns.scatterplot(
+        x=df.utm_dr_x,
+        y=df.utm_dr_y,
+        color='tab:blue',
+        label='Dead-Reckoned',
+        linewidth=0,
+        s=8,
+        data=df
+    )
+    sns.scatterplot(
+        x=df.utm_odo_x,
+        y=df.utm_odo_y,
+        color='tab:orange',
+        label='DVL Odometry',
+        linewidth=0,
+        s=8,
+        data=df
+    )
+    sns.scatterplot(
+        x=df.utm_gps_x, 
+        y=df.utm_gps_y,
+        marker='X',
+        color='tab:red', 
+        label='GPS Fix',
+        s=200,
+        data=df,
+    )
+    # TODO -- can add marker for when TAN is able to recognize a feature
+    lgnd = ax.legend(frameon=True)
+    lgnd.legendHandles[0]._sizes = [60]
+    lgnd.legendHandles[1]._sizes = [60]
+    lgnd.legendHandles[2]._sizes = [200]
+    dt = df.index[0].replace(microsecond=0)
+    plt.axis('equal')
+    plt.suptitle('DVL Odometry', fontweight='bold')
     plt.title('%s Kolumbo Volcano %s' % (unit_name[glider], dt.isoformat(),))
     plt.xlabel('x position [m]')
     plt.ylabel('y position [m]')

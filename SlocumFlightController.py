@@ -7,6 +7,8 @@ import pandas as pd
 import numpy as np
 import time 
 from datetime import datetime
+from os import listdir
+from os.path import isfile, join
 
 
 class SlocumFlightController(object):
@@ -17,53 +19,73 @@ class SlocumFlightController(object):
         variables are desired, simply add them to the label list below.
         """
         self._label_list = [
+            # Index Variable
+            'time',
+
+            # User Defined Variables   
+            'm_filename_hash',
+            'm_mission_hash',
+
+            # Dynamics Variables 
             'm_present_time',
             'm_speed',
             'm_pitch',
-            'c_pitch',
             'm_roll',
-            'c_roll',
             'm_heading',
-            'c_heading',
             'm_fin',
-            'c_fin',
-            'm_battery',
-            'm_vacuum',
             'm_depth',
+            'm_depth_rate_avg_final',
+            'm_water_depth',
             'm_pressure',
             'm_altitude',
-            'm_water_depth',
-            'm_depth_rate_avg_final',
-            'm_final_water_vx',
-            'm_final_water_vy',
-            'm_water_vx',
-            'm_water_vy',
+            'm_battery',
+            'm_vacuum',
+            
+            # Controller Variables 
+            'c_pitch',
+            'c_roll',
+            'c_heading',
+            'c_fin',
             'c_wpt_lat',
             'c_wpt_lon',
-            'm_vx_lmc',
-            'm_vy_lmc',
-            'm_lat',
-            'm_lon',
+
+            # GPS Variables
+            'm_gps_x_lmc',
+            'm_gps_y_lmc',
+            'm_gps_fix_x_lmc',
+            'm_gps_fix_y_lmc',
+            'm_gps_status',
+            'm_gps_full_status',
+
+            # LMC Variables 
+            'm_x_lmc',
+            'm_y_lmc',
             'm_dr_time',
+            'm_dr_surf_x_lmc',
+            'm_dr_surf_y_lmc',
             'm_ext_x_lmc',
             'm_ext_y_lmc',
             'm_ext_z_lmc',
-            'm_dr_surf_x_lmc',
-            'm_dr_surf_y_lmc',
-            'm_x_lmc',
-            'm_y_lmc',
             'x_lmc_xy_source',
+
+            # Lat/Lon Variables
+            'm_lat',
+            'm_lon',
             'm_gps_lat',
             'm_gps_lon',
-            'm_gps_fix_x_lmc',
-            'm_gps_fix_y_lmc',
-            'm_gps_x_lmc',
-            'm_gps_y_lmc',
-            'm_gps_status',
-            'm_gps_full_status',
+
+            # Velocity Variables
+            'm_water_vx',
+            'm_water_vy',
+            'm_vx_lmc',
+            'm_vy_lmc',
+            'm_final_water_vx',
+            'm_final_water_vy',
+
+            # Miscellaneous Variables
             'm_appear_to_be_at_surface',
-            'sci_m_present_time',
             'm_science_clothesline_lag',
+            'sci_m_present_time',
             'x_software_ver'
         ]
         self._header        = None
@@ -118,6 +140,18 @@ class SlocumFlightController(object):
     @property
     def ensemble_list(self):
         return self._ensemble_list
+
+
+    def get_data(self, ensemble, var):
+        """Retrieve value of a variable in the ensemble array 
+        """
+        return ensemble[self.data_lookup[var]]
+
+
+    def set_data(self, ensemble, var, val):
+        """Set variable-value pair in the data ensemble
+        """
+        ensemble[self.data_lookup[var]] = val
         
 
     def get_var_unit(self, var_name):
@@ -146,7 +180,7 @@ class SlocumFlightController(object):
         if self.ensemble_list:
             ts      = np.array(self.ensemble_list)
             cols    = self.label_list
-            t_index = self.data_lookup['m_present_time']
+            t_index = self.data_lookup['time']
             t       = ts[:,t_index]
             index   = pd.DatetimeIndex([datetime.fromtimestamp(v) for v in t])
             new_df  = pd.DataFrame(data=ts, index=index, columns=cols)
@@ -160,11 +194,11 @@ class SlocumFlightController(object):
             # reset the ensemble list once added to the DataFrame
             self._ensemble_list = []
         else:
-            print("WARNING: No ensembles to add to DataFrame.")
+            print("  WARNING: No ensembles to add to DataFrame.")
     
     
     @classmethod
-    def from_asc(cls, filepath, save, verbose=True):
+    def from_asc(cls, filepath, save, verbose=True, interval=True):
         """Parses DBD (flight controller file) from the Slocum Glider.
 
         Args: 
@@ -175,6 +209,7 @@ class SlocumFlightController(object):
         """
         PRINT_INTERVAL = 200 
         HEADER_LEN = 14
+        TIME_ZONE_OFFSET = 5
 
         # open the file 
         asc_file = open(filepath, 'rb').read()
@@ -182,7 +217,7 @@ class SlocumFlightController(object):
         count = 0
         if verbose:
             print('________________________________________')
-            print('- Parsing Slocum File (Flight) ---------')
+            print('  Parsing Flight Controller ------------')
             print('    input file: %s' % (filename,))
             parse_start = time.time()
 
@@ -203,26 +238,48 @@ class SlocumFlightController(object):
             ts._var_names = f.readline().split(' ')[:-1]
             ts._var_units = f.readline().split(' ')[:-1]
             ts._var_sizes = f.readline().split(' ')[:-1]
-            ts._var_dict  = {_ : ts.var_names.index(_) for _ in ts.label_list}
+            ts._var_dict  = {_ : ts.var_names.index(_) for _ in ts.label_list if _ in ts.var_names}
 
             # parse ensembles until the file is empty 
-            line   = [float(_) for _ in f.readline().split(' ')[:-1]]
+            line = [float(_) for _ in f.readline().split(' ')[:-1]]
             while line:
                 count += 1
-                ens = np.array([line[ts.var_dict[_]] for _ in ts.label_list])
-                ts.add_ensemble(ens)
-                line = [float(_) for _ in f.readline().split(' ')[:-1]]
+
+                # add selected variables to ensemble 
+                ensemble = np.zeros(ts.ensemble_size)
+                for var in ts.label_list:
+                    if var in ts.var_dict:
+                        val = line[ts.var_dict[var]]
+                        ts.set_data(ensemble, var, val)
+
+                # add user defined variables to ensemble 
+                ts.set_data(ensemble, 'm_filename_hash', 
+                    hash(header['filename']))
+
+                # filename changes with dive number, not mission 
+                #   + important because LMC coordinates reset each mission
+                mission = header['filename'].rsplit('-',1)[0]
+                ts.set_data(ensemble, 'm_mission_hash', hash(mission))
+
+                # convert time from EDT to UTC
+                EDT_time = ts.get_data(ensemble, 'm_present_time')
+                UTC_time = datetime.fromtimestamp(EDT_time) + \
+                    pd.Timedelta("%d hours" % TIME_ZONE_OFFSET)
+                ts.set_data(ensemble, 'time', UTC_time.timestamp())
+                ts.add_ensemble(ensemble)
 
                 # print number of ensembles parsed periodically 
-                if verbose:
+                if verbose and interval:
                     if (count % PRINT_INTERVAL == 0):
                         print('    # ensembles:  %5d' % (count,))
+
+                line = [float(_) for _ in f.readline().split(' ')[:-1]]
 
         # parsing completed 
         ts.to_dataframe()
         if verbose:
             parse_stop = time.time()
-            print('- Parsing Complete ---------------------')
+            print('  Parsing Complete ---------------------')
             print('    # ensembles:  %5d'    % (count))
             print('    parsing time:  %f'    % (parse_stop - parse_start))
 
@@ -242,4 +299,21 @@ class SlocumFlightController(object):
                 print('    output file:   %s'    % (name+'.CSV'))
      
         return(ts)
+
+
+    @classmethod
+    def from_directory(cls, directory, save=None, name=None, verbose=False):
+        """Constructor of flight controllers log from directory of .asc files 
+        """
+        print('>> Parsing folder of ASC Files')
+        # acquire a list of all files in the provided directory 
+        file_list = [f for f in listdir(directory) if 
+                     isfile(join(directory,f)) and f.split('.')[-1] == 'asc']
+        frames    = [cls.from_asc(directory+f, save=False, verbose=verbose,
+                     interval=False).df for f in file_list]
+        ts        = cls()
+        ts._df    = pd.concat(frames)
+        ts._df.sort_index(inplace=True)
+        print('>> Finished Parsing!')
+        return ts
 

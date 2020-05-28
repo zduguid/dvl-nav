@@ -6,16 +6,22 @@
 
 <!-----------------------------------------------
 Most Recent Changes:
-- add rotation to handle pitch and roll bias of DVL mounting
-- avoid vertical speed calculation when depth not updated
-- second bin now being used for DVL through water velocity
+- added section to readme documentation (dataset overview)
+- converted glider files from EDT to UTC
+- reorganized flight controller files
+- need to be clever about combining mission files and dive files together 
+    - issue regarding when LMC coordinates are reset?
+    - issue with timestamps showing up out of order (fixed with sort_index meth)
+    - issue with gps fix being shown far off screen (but not gps_lmc)
 
 Changes Before Commit: 
+- finish data set overview in README
 
 Future TODOs
-- add a "glider" file that has bias parameter information 
 - implement SlocumScienceController
+- add a "glider" file that has bias parameter information 
 - add ability to include Slocum data in the Pathfinder time series
+- add more constructor methods ("from_csv", "from_frames", "from_directory")
 ------------------------------------------------>
 
 
@@ -43,6 +49,8 @@ There are three Pathfinder object classes implemented in this repository:
   - [Derived Fields](#derived-fields)
   - [Water Profiling Fields](#water-profiling-fields)
   - [Bottom Track Fields](#bottom-track-fields)
+- [Slocum Glider Data Fields](#slocum-glider-data-fields)
+- [Kolumbo Data Set Overview](#kolumbo-data-set-overview)
 - [Miscellaneous Notes](#miscellaneous-notes)
 
 
@@ -188,7 +196,6 @@ The meaning of the four coordinate systems are described in the table below. Not
 | `angle_of_attack`     | [deg] | Angle of attack of the glider, currently assumed to be zero for simplicity. |
 
 
-
 <!---------------------------------------------->
 ### Water Profiling Fields 
 
@@ -214,6 +221,89 @@ Note that the interpretation of the water-profiling fields is dependent on the c
 | `btm_max_error_velocity`    | [m/s] | Maximum error velocity | 
 
 
+
+<!---------------------------------------------------------------------------->
+## Slocum Glider Data Fields
+<!-- TODO -->
+| Variable Name               | Units | Description | 
+| --- | --- | --- |
+| `m_present_time` | | |
+| `m_speed` | | |
+| `m_pitch` | | |
+| `m_roll` | | |
+| `m_heading` | | |
+| `m_fin` | | |
+| `m_depth` | | |
+| `m_depth_rate_avg_final` | | |
+| `m_water_depth` | | |
+| `m_pressure` | | |
+| `m_altitude` | | |
+| `m_battery` | | |
+| `m_vacuum` | | |
+| `c_pitch` | | |
+| `c_roll` | | |
+| `c_heading` | | |
+| `c_fin` | | |
+| `c_wpt_lat` | | |
+| `c_wpt_lon` | | |
+| `m_gps_x_lmc` | | |
+| `m_gps_y_lmc` | | |
+| `m_gps_fix_x_lmc` | | |
+| `m_gps_fix_y_lmc` | | |
+| `m_gps_status` | | |
+| `m_gps_full_status` | | |
+| `m_x_lmc` | | |
+| `m_y_lmc` | | |
+| `m_dr_time` | | |
+| `m_dr_surf_x_lmc` | | |
+| `m_dr_surf_y_lmc` | | |
+| `m_ext_x_lmc` | | |
+| `m_ext_y_lmc` | | |
+| `m_ext_z_lmc` | | |
+| `x_lmc_xy_source` | | |
+| `m_lat` | | |
+| `m_lon` | | |
+| `m_gps_lat` | | |
+| `m_gps_lon` | | |
+| `m_water_vx` | | |
+| `m_water_vy` | | |
+| `m_vx_lmc` | | |
+| `m_vy_lmc` | | |
+| `m_final_water_vx` | | |
+| `m_final_water_vy` | | |
+| `m_appear_to_be_at_surface` | | |
+| `m_science_clothesline_lag` | | |
+| `sci_m_present_time` | | |
+
+
+<!---------------------------------------------------------------------------->
+## Kolumbo Data Set Overview
+
+Sentinel glider only
+<!-- TODO -->
+
+|Mission # |PD0 File |Start |End |Duration  |# of Dives  |Max Depth |
+| ---     | ---     | ---                | ---                | ---  |---|--- |
+|Dive 1   |sk211610 |2019-11-21 16:10:24 |2019-11-21 16:28:54 |0.308 |2  |9   |
+|Dive 2   |sk211652 |2019-11-21 16:52:53 |2019-11-21 20:35:37 |3.712 |13 |106 |
+|Dive 3   |01820002 |2019-11-21 21:17:11 |2019-11-21 23:53:33 |2.606 |11 |103 |
+|Dive 4   |sk220034 |2019-11-22 00:34:46 |2019-11-22 01:28:11 |0.890 |4  |95  |
+|Dive 5   |01820008 |2019-11-22 01:44:56 |2019-11-22 02:40:35 |0.927 |4  |75  |
+|Dive 6   |01820010 |2019-11-22 03:24:02 |2019-11-22 03:46:45 |0.379 |1  |65  |
+|Dive 7   |01820013 |2019-11-22 04:03:29 |2019-11-22 04:51:22 |0.798 |4  |66  |
+|Dive 8   |sk220500 |2019-11-22 05:00:31 |2019-11-22 06:07:27 |1.115 |5  |57  |
+|Dive 9   |sk222256 |2019-11-22 22:56:40 |2019-11-23 01:06:52 |2.170 |13 |52  |
+|Dive 10  |sk230107 |2019-11-23 01:07:16 |2019-11-23 01:44:41 |0.623 |2  |52  |
+|Dive 11\*|sk230148 |2019-11-23 01:48:05 |2019-11-23 02:43:28 |0.923 |1  |387 |
+|Dive 12  |sk230350 |2019-11-23 03:50:37 |2019-11-23 06:41:37 |2.850 |15 |53  |
+|Dive 13\*|sk261107 |2019-11-26 11:07:19 |2019-11-26 11:55:24 |0.801 |1  |275 |
+|Dive 14  |sk261222 |2019-11-26 12:22:16 |2019-11-26 15:24:27 |3.036 |5  |415 |
+
+\*These dives seems to crash into the seafloor. The DVL file does not include a return to surface.
+
+
+
+
 <!---------------------------------------------------------------------------->
 ## Miscellaneous Notes
 - `python -m cProfile -s tottime simul.py` -- terminal command that runs Python profiler over function and provides extensive information about how many times each sub-method is called and how long each sub-method takes to execute. 
@@ -222,4 +312,4 @@ Note that the interpretation of the water-profiling fields is dependent on the c
   - [Medium: A Beginner’s Guide to Optimizing Pandas Code for Speed](https://engineering.upside.com/a-beginners-guide-to-optimizing-pandas-code-for-speed-c09ef2c6a4d6)
 - the best way to incrementally build a numpy array, without knowing the final array size ahead of time, is to append numpy array rows to a python list and then cast the list into a 2D numpy array at the end. Using the `np.concatenate()` or `numpy.append()` functions are much slower. One downside of casting a python list to a numpy array is that both the list and array will be stored in memory at the same time. 
   - [Stack Overflow: Best way to incrementally build a numpy array](https://stackoverflow.com/questions/30468454/what-is-the-best-way-to-incrementally-build-a-numpy-array)
-
+- Converting from lat/lon to UTM coordinates performed using the [UTM library](https://github.com/Turbo87/utm)
