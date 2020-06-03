@@ -164,11 +164,22 @@ def plot_odometry_and_dr(df, glider, save_name=None):
         s=200,
         data=df,
     )
+    sns.scatterplot(
+        x=df.utm_wpt_x, 
+        y=df.utm_wpt_y,
+        marker='o',
+        color='tab:green', 
+        label='Waypoint Target',
+        s=100,
+        data=df,
+    )
     # TODO -- can add marker for when TAN is able to recognize a feature
     lgnd = ax.legend(frameon=True)
     lgnd.legendHandles[0]._sizes = [60]
     lgnd.legendHandles[1]._sizes = [60]
     lgnd.legendHandles[2]._sizes = [200]
+    if len(lgnd.legendHandles) == 4:
+        lgnd.legendHandles[3]._sizes = [100]
     dt = df.index[0].replace(microsecond=0)
     plt.axis('equal')
     plt.suptitle('DVL Odometry', fontweight='bold')

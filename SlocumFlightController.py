@@ -34,7 +34,7 @@ class SlocumFlightController(object):
             'm_heading',
             'm_fin',
             'm_depth',
-            'm_depth_rate_avg_final',
+            'm_depth_rate',
             'm_water_depth',
             'm_pressure',
             'm_altitude',
@@ -46,8 +46,6 @@ class SlocumFlightController(object):
             'c_roll',
             'c_heading',
             'c_fin',
-            'c_wpt_lat',
-            'c_wpt_lon',
 
             # GPS Variables
             'm_gps_x_lmc',
@@ -67,20 +65,22 @@ class SlocumFlightController(object):
             'm_ext_y_lmc',
             'm_ext_z_lmc',
             'x_lmc_xy_source',
+            'c_wpt_x_lmc',
+            'c_wpt_y_lmc',
 
             # Lat/Lon Variables
             'm_lat',
             'm_lon',
             'm_gps_lat',
             'm_gps_lon',
+            'c_wpt_lat',
+            'c_wpt_lon',
 
             # Velocity Variables
             'm_water_vx',
             'm_water_vy',
             'm_vx_lmc',
             'm_vy_lmc',
-            'm_final_water_vx',
-            'm_final_water_vy',
 
             # Miscellaneous Variables
             'm_appear_to_be_at_surface',
@@ -163,7 +163,23 @@ class SlocumFlightController(object):
     def add_ensemble(self, ensemble):
         """Adds an ensemble to the ensemble list.
         """
-        self._ensemble_list.append(ensemble)    
+        self._ensemble_list.append(ensemble) 
+
+
+    def get_utm_coords(m_lat, m_lon): 
+        """TODO
+        """
+        SECS_IN_MIN = 60
+        MIN_OFFSET = 100
+        lat_min  = m_lat % MIN_OFFSET 
+        lon_min  = m_lon % MIN_OFFSET 
+        lat_dec  = (m_lat - lat_min)/MIN_OFFSET + lat_min/SECS_IN_MIN
+        lon_dec  = (m_lon - lon_min)/MIN_OFFSET + lon_min/SECS_IN_MIN
+        utm_pos  = utm.from_latlon(lat_dec, lon_dec)
+        easting  = round(utm_pos[0],2)
+        northing = round(utm_pos[1],2)
+        zone     = utm_pos[2]
+        return(easting, northing, zone)   
 
 
     def to_dataframe(self):

@@ -6,21 +6,13 @@
 
 <!-----------------------------------------------
 Most Recent Changes:
-- added section to readme documentation (dataset overview)
-- converted glider files from EDT to UTC
-- reorganized flight controller files
-- need to be clever about combining mission files and dive files together 
-    - issue regarding when LMC coordinates are reset?
-    - issue with timestamps showing up out of order (fixed with sort_index meth)
-    - issue with gps fix being shown far off screen (but not gps_lmc)
 
 Changes Before Commit: 
-- finish data set overview in README
+- add UTM conversion function to pathfinder class? or keep in notebook?
 
 Future TODOs
 - implement SlocumScienceController
 - add a "glider" file that has bias parameter information 
-- add ability to include Slocum data in the Pathfinder time series
 - add more constructor methods ("from_csv", "from_frames", "from_directory")
 ------------------------------------------------>
 
@@ -224,63 +216,61 @@ Note that the interpretation of the water-profiling fields is dependent on the c
 
 <!---------------------------------------------------------------------------->
 ## Slocum Glider Data Fields
-<!-- TODO -->
+The following data fields are extracted from the flight computer of the Slocum Glider. The units and a brief description of each variable is shown in the table below. LMC stands for Local Mission Coordinates.
+
 | Variable Name               | Units | Description | 
 | --- | --- | --- |
-| `m_present_time` | | |
-| `m_speed` | | |
-| `m_pitch` | | |
-| `m_roll` | | |
-| `m_heading` | | |
-| `m_fin` | | |
-| `m_depth` | | |
-| `m_depth_rate_avg_final` | | |
-| `m_water_depth` | | |
-| `m_pressure` | | |
-| `m_altitude` | | |
-| `m_battery` | | |
-| `m_vacuum` | | |
-| `c_pitch` | | |
-| `c_roll` | | |
-| `c_heading` | | |
-| `c_fin` | | |
-| `c_wpt_lat` | | |
-| `c_wpt_lon` | | |
-| `m_gps_x_lmc` | | |
-| `m_gps_y_lmc` | | |
-| `m_gps_fix_x_lmc` | | |
-| `m_gps_fix_y_lmc` | | |
-| `m_gps_status` | | |
-| `m_gps_full_status` | | |
-| `m_x_lmc` | | |
-| `m_y_lmc` | | |
-| `m_dr_time` | | |
-| `m_dr_surf_x_lmc` | | |
-| `m_dr_surf_y_lmc` | | |
-| `m_ext_x_lmc` | | |
-| `m_ext_y_lmc` | | |
-| `m_ext_z_lmc` | | |
-| `x_lmc_xy_source` | | |
-| `m_lat` | | |
-| `m_lon` | | |
-| `m_gps_lat` | | |
-| `m_gps_lon` | | |
-| `m_water_vx` | | |
-| `m_water_vy` | | |
-| `m_vx_lmc` | | |
-| `m_vy_lmc` | | |
-| `m_final_water_vx` | | |
-| `m_final_water_vy` | | |
-| `m_appear_to_be_at_surface` | | |
-| `m_science_clothesline_lag` | | |
-| `sci_m_present_time` | | |
+| `m_present_time`  | [s]   | Time since 1970. |
+| `m_speed`         | [m/s] | Horizontal through water speed. |
+| `m_pitch`         | [rad] | Pitch of the vehicle, >0 means nose up. |
+| `m_roll`          | [rad] | Roll of the vehicle, >0 means port wing up. |
+| `m_heading`       | [rad] | Heading of the glider. |
+| `m_fin`           | [rad] | Angular position of the tail fin. |
+| `m_depth`         | [m]   | Depth of the vehicle. |
+| `m_depth_rate`    | [m/s] | Depth rate of the vehicle. |
+| `m_water_depth`   | [m]   | Vehicle depth plus altitude of vehicle. |
+| `m_pressure`      | [bar] | Pressure measured by the vehicle. |
+| `m_altitude`      | [m]   | Height above seafloor. |
+| `m_battery`       | [V]   | Average battery voltage. |
+| `m_vacuum`        | [inHg]| Internal glider pressure. |
+| `c_pitch`         | [rad] | Commanded pitch. |
+| `c_roll`          | [rad] | Commanded roll. |
+| `c_heading`       | [rad] | Commanded heading. |
+| `c_fin`           | [rad] | Commanded fin position, >0 vehicle turns right. |
+| `m_gps_x_lmc`     | [m]   | GPS position in LMC. |
+| `m_gps_y_lmc`     | [m]   | GPs position in LMC. |
+| `m_gps_fix_x_lmc` | [m]   | Location of first GPS position fix in LMC. |
+| `m_gps_fix_y_lmc` | [m]   | Location of first GPS position fix in LMC. |
+| `m_gps_status`    |       | Updated status of the GPS. |
+| `m_x_lmc`         | [m]   | Waypoint location in LMC. |
+| `m_y_lmc`         | [m]   | Waypoint location in LMC. |
+| `m_dr_time`       | [s]   | Time glider has been underwater since last surface.|
+| `m_dr_surf_x_lmc` | [m]   | Dead-reckoned surface location in LMC. |
+| `m_dr_surf_y_lmc` | [m]   | Dead-reckoned surface location in LMC. |
+| `m_ext_x_lmc`     | [m]   | Vehicle position from external navigation unit. |
+| `m_ext_y_lmc`     | [m]   | Vehicle position from external navigation unit. |
+| `m_ext_z_lmc`     | [m]   | Vehicle position from external navigation unit. |
+| `x_lmc_xy_source` |       | Explains how LMC position was computed. Could be from GPS, dead-reckoned, initiated to zero, or not computed during this cycle.|
+| `c_wpt_x_lmc`     | [m]   | Commanded waypoint in LMC coordinates. |
+| `c_wpt_y_lmc`     | [m]   | Commanded waypoint in LMC coordinates. |
+| `m_lat`           | [deg] | Vehicle position in terms of latitude. |
+| `m_lon`           | [deg] | Vehicle position in terms of longitude. |
+| `m_gps_lat`       | [deg] | Latitude in DDMM.MMMM format, >0 in the North. |
+| `m_gps_lon`       | [deg] | Longitude in DDMM.MMMM format, >0 in the East. |
+| `m_water_vx`      | [m/s] | Water speed in LMC. |
+| `m_water_vy`      | [m/s] | Water speed in LMC. |
+| `m_vx_lmc`        | [m/s] | Horizontal speed over ground, in LMC. |
+| `m_vy_lmc`        | [m/s] | Horizontal speed over ground, in LMC. |
+| `m_appear_to_be_at_surface` | [bool] | True if glider appears to be at surface. |
+| `m_science_clothesline_lag` | [s]    | Time lag between flight computer and science computer. |
+| `sci_m_present_time` |        [s]    | Seconds since 1970. |
+| `x_software_ver` |                   | Current software version. | 
 
 
 <!---------------------------------------------------------------------------->
 ## Kolumbo Data Set Overview
 
-Sentinel glider only
-<!-- TODO -->
+The following data files were collected from the Sentinel glider during the Kolumbo experiments in November 2019.
 
 |Mission # |PD0 File |Start |End |Duration  |# of Dives  |Max Depth |
 | ---     | ---     | ---                | ---                | ---  |---|--- |
