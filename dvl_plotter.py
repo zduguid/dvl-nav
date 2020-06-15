@@ -355,12 +355,13 @@ def plot_velocity_eastward(ts, glider, save_name=None):
 ###############################################################################
 # PLOT VELOCITIES (NORTHWARD) 
 ###############################################################################
-def plot_velocity_northward(ts, glider, save_name=None):
+def plot_velocity_northward(ts, glider, save_name=None, roll_size=10,
+    plt_pressure=True, plt_pitch=True):
     sns.set(font_scale = 1.5)
     fig, ax = plt.subplots(figsize=(15,8))
     sns.scatterplot(
         x=ts.df.time,
-        y=-ts.df.vel_bin0_beam1.rolling(10).median(),
+        y=-ts.df.vel_bin0_beam1.rolling(roll_size).median(),
         color='lightblue',
         data=ts.df,
         s=10,
@@ -369,7 +370,7 @@ def plot_velocity_northward(ts, glider, save_name=None):
     )
     sns.scatterplot(
         x=ts.df.time,
-        y=-ts.df.vel_bin1_beam1.rolling(10).median(),
+        y=-ts.df.vel_bin1_beam1.rolling(roll_size).median(),
         color='deepskyblue',
         data=ts.df,
         s=10,
@@ -378,7 +379,7 @@ def plot_velocity_northward(ts, glider, save_name=None):
     )
     sns.scatterplot(
         x=ts.df.time,
-        y=-ts.df.vel_bin2_beam1.rolling(10).median(),
+        y=-ts.df.vel_bin2_beam1.rolling(roll_size).median(),
         color='cornflowerblue',
         data=ts.df,
         s=10,
@@ -387,7 +388,7 @@ def plot_velocity_northward(ts, glider, save_name=None):
     )
     sns.scatterplot(
         x=ts.df.time,
-        y=-ts.df.vel_bin3_beam1.rolling(10).median(),
+        y=-ts.df.vel_bin3_beam1.rolling(roll_size).median(),
         color='royalblue',
         data=ts.df,
         s=10,
@@ -396,7 +397,7 @@ def plot_velocity_northward(ts, glider, save_name=None):
     )
     sns.scatterplot(
         x=ts.df.time,
-        y=-ts.df.vel_bin4_beam1.rolling(10).median(),
+        y=-ts.df.vel_bin4_beam1.rolling(roll_size).median(),
         color='blue',
         data=ts.df,
         s=10,
@@ -405,7 +406,7 @@ def plot_velocity_northward(ts, glider, save_name=None):
     )
     sns.scatterplot(
         x=ts.df.time,
-        y=-ts.df.vel_bin5_beam1.rolling(10).median(),
+        y=-ts.df.vel_bin5_beam1.rolling(roll_size).median(),
         color='darkblue',
         data=ts.df,
         s=10,
@@ -414,23 +415,87 @@ def plot_velocity_northward(ts, glider, save_name=None):
     )
     sns.scatterplot(
         x=ts.df.time,
-        y=ts.df.abs_vel_btm_v.rolling(10).median(),
+        y=ts.df.abs_vel_btm_v.rolling(roll_size).median(),
         color='tab:orange',
         data=ts.df,
         s=10,
         linewidth=0,
         label='btm'
     )
+    if plt_pressure:
+        sns.scatterplot(
+            x=ts.df.time,
+            y=ts.df.rel_vel_pressure_v.rolling(roll_size).median(),
+            color='magenta',
+            data=ts.df,
+            s=10,
+            linewidth=0,
+            label='$\Delta$z/$\Delta$t'
+        )
+    if plt_pitch:
+        sns.scatterplot(
+            x=ts.df.time,
+            y=ts.df.pitch.rolling(roll_size).median()/100,
+            color='tab:green',
+            data=ts.df,
+            s=10,
+            linewidth=0,
+            label='pitch'
+        )
+    dt = datetime.datetime.fromtimestamp(ts.df.time[0]).replace(microsecond=0)
+    plt.suptitle('Northward Component of Velocity', fontweight='bold')
+    plt.title('%s Kolumbo Volcano %s' % (unit_name[glider], dt.isoformat(),))
+    plt.xlabel('Time')
+    plt.ylabel('Velocity [m/s]')
+    plt.savefig('/Users/zduguid/Desktop/fig/tmp.png')
+    if save_name: plt.savefig(save_name)
+    else:         plt.savefig('/Users/zduguid/Desktop/fig/tmp.png')
+
+
+###############################################################################
+# PLOT VELOCITIES (TODO) 
+###############################################################################
+def plot_velocity_todo(ts, glider, save_name=None, roll_size=10):
+    sns.set(font_scale = 1.5)
+    fig, ax = plt.subplots(figsize=(15,8))
     sns.scatterplot(
         x=ts.df.time,
-        y=ts.df.rel_vel_pressure_v.rolling(10).median(),
-        color='magenta',
+        y=-ts.df.vel_bin0_beam1 - (-ts.df.vel_bin1_beam1),
+        color='tab:blue',
         data=ts.df,
         s=10,
         linewidth=0,
-        label='$\Delta$z/$\Delta$t'
+        label='bin0 - bin1'
+    )
+    sns.scatterplot(
+        x=ts.df.time,
+        y=-ts.df.vel_bin1_beam1 - (-ts.df.vel_bin2_beam1),
+        color='tab:orange',
+        data=ts.df,
+        s=10,
+        linewidth=0,
+        label='bin1 - bin2'
+    )
+    sns.scatterplot(
+        x=ts.df.time,
+        y=-ts.df.vel_bin2_beam1 - (-ts.df.vel_bin3_beam1),
+        color='tab:green',
+        data=ts.df,
+        s=10,
+        linewidth=0,
+        label='bin2 - bin3'
+    )
+    sns.scatterplot(
+        x=ts.df.time,
+        y=-ts.df.vel_bin3_beam1 - (-ts.df.vel_bin4_beam1),
+        color='tab:red',
+        data=ts.df,
+        s=10,
+        linewidth=0,
+        label='bin3 - bin4'
     )
     dt = datetime.datetime.fromtimestamp(ts.df.time[0]).replace(microsecond=0)
+    ax.set_ylim(-0.25,0.25)
     plt.suptitle('Northward Component of Velocity', fontweight='bold')
     plt.title('%s Kolumbo Volcano %s' % (unit_name[glider], dt.isoformat(),))
     plt.xlabel('Time')

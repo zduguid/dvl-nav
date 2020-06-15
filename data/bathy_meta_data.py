@@ -5,16 +5,20 @@ BathyData = {
     # Kolumbo Data Subset
     ##################################################
     'Kolumbo' : {
-        'file'  : "/Users/zduguid/Dropbox (MIT)/MIT-WHOI/Kolumbo cruise 2019/Grids/kolumbo bathymetry.tif",
+        # 'file'  : "/Users/zduguid/Dropbox (MIT)/MIT-WHOI/Kolumbo cruise 2019/Grids/kolumbo bathymetry.tif",
+        'file'  : "/Users/zduguid/Dropbox (MIT)/MIT-WHOI/Kolumbo cruise 2019/zduguid/bathy/Kolumbo-10m.tif",
         'AR'    : True,
-        'crop'  : None,
-        'title' : 'Kolumbo Volcano, Santorini, Greece',
+        'crop'  : [700, 1450, 700, 1300],
+            # crop  = [top, bot, left, right]
+            # bathy = bathy_im[top:bot, left:right]
+        'title' : 'Kolumbo Volcano, Greece',
         'xlabel': 'Longitude [deg]',
         'ylabel': 'Latitude [deg]',
         'ticks' : '%.3f',
-        'num_ticks' : 5,
+        'num_ticks' : 3,
         'slope_max' : None,
-        'depth_max' : None
+        'depth_max' : None,
+        'depth_filter' : None,
     },
 
 
@@ -22,16 +26,39 @@ BathyData = {
     # Kolumbo Data Full
     ##################################################
     'Kolumbo_full' : {
-        'file'  : "/Users/zduguid/Dropbox (MIT)/MIT-WHOI/Kolumbo cruise 2019/zduguid/Kolumbo _Ios_10m_grid.tif",
+        'file'  : "/Users/zduguid/Dropbox (MIT)/MIT-WHOI/Kolumbo cruise 2019/zduguid/bathy/Kolumbo-10m.tif",
         'AR'    : True,
         'crop'  : None,
-        'title' : 'Kolumbo Volcano, Santorini, Greece',
+            # crop  = [top, bot, left, right]
+            # bathy = bathy_im[top:bot, left:right]
+        'title' : 'Kolumbo Volcano, Greece',
         'xlabel': 'Longitude [deg]',
         'ylabel': 'Latitude [deg]',
         'ticks' : '%.3f',
-        'num_ticks' : 5,
+        'num_ticks' : 3,
         'slope_max' : None,
-        'depth_max' : None
+        'depth_max' : None,
+        'depth_filter' : None,
+    },
+
+
+    ##################################################
+    # Santorini Data Full
+    ##################################################
+    'Santorini_full' : {
+        'file'  : "/Users/zduguid/Dropbox (MIT)/MIT-WHOI/Kolumbo cruise 2019/zduguid/bathy/Christiana-Santorini-Kolumbo.tif",
+        'AR'    : True,
+        'crop'  : None,
+            # crop  = [top, bot, left, right]
+            # bathy = bathy_im[top:bot, left:right]
+        'title' : 'Kolumbo Volcano, Greece',
+        'xlabel': 'Longitude [deg]',
+        'ylabel': 'Latitude [deg]',
+        'ticks' : '%.3f',
+        'num_ticks' : 3,
+        'slope_max' : None,
+        'depth_max' : None,
+        'depth_filter' : None,
     },
 
 
@@ -50,7 +77,8 @@ BathyData = {
         'ticks' : '%.2g',
         'slope_max' : 8,
         'depth_max' : 35,
-        'num_ticks' : 5,
+        'depth_filter' : None,
+        'num_ticks' : 3,
         'meta'  : {
             'utm_zone' : 19,
             'coordinate_system' : 'North American Datum of 1983 and the North American Vertical Datum of 1988',
@@ -68,12 +96,13 @@ BathyData = {
         'crop'  : None,
             # crop  = [top, bot, left, right]
             # bathy = bathy_im[top:bot, left:right]
-        'title' : 'Costa Rica',
+        'title' : 'Continental Margin, Costa Rica',
         'xlabel': 'UTM Zone 16',
         'ylabel': '',
         'ticks' : '%.4g',
         'slope_max' : None,
         'depth_max' : None,
+        'depth_filter' : None,
         'num_ticks' : 3,
         'meta'  : {
             'utm_zone' : '16N',
@@ -90,12 +119,13 @@ BathyData = {
         'crop'  : [75, 550, 600, 1200],
             # crop  = [top, bot, left, right]
             # bathy = bathy_im[top:bot, left:right]
-        'title' : 'Costa Rica',
+        'title' : 'Jaco Scar, Costa Rica',
         'xlabel': 'UTM Zone 16',
         'ylabel': '',
         'ticks' : '%.4g',
         'slope_max' : None,
-        'depth_max' : 1000,
+        'depth_max' : None,
+        'depth_filter' : 1000,
         'num_ticks' : 3,
         'meta'  : {
             'utm_zone' : '16N',
@@ -107,19 +137,21 @@ BathyData = {
     # Costa Rica Data Full
     ##################################################
     'CostaRica_full' : {
-        'file'  : "/Users/zduguid/Documents/MIT-WHOI/MERS/Cook/cook/bathymetry/jaco-scar-depths.tif",
+        # 'file'  : "/Users/zduguid/Documents/MIT-WHOI/MERS/Cook/cook/bathymetry/jaco-scar-depths.tif",
+        'file'  : "/Users/zduguid/Dropbox (MIT)/MIT-WHOI/18-Falkor Costa Rica/zduguid/three-factor-bathymetry/CostaRica Falkor.tif",
         'AR'    : False,
-        'crop'  : None,
+        'crop'  : False,
             # crop  = [top, bot, left, right]
             # bathy = bathy_im[top:bot, left:right]
-        'title' : 'Costa Rica',
+        'title' : 'Falkor Dec 2018 Cruise, Costa Rica',
         'xlabel': 'UTM Zone 16',
         'ylabel': '',
         'ticks' : '%.4g',
-        'slope_max' : None,
-        'depth_max' : None,
+        'slope_max' : False,
+        'depth_max' : False,
+        'depth_filter' : None,
         'num_ticks' : 3,
-        'nodata' : 255,
+        'nodata' : 0.0,
         'meta'  : {
             'utm_zone' : '16N',
         }
@@ -135,12 +167,13 @@ BathyData = {
         'crop'  : None,
             # crop  = [top, bot, left, right]
             # bathy = bathy_im[top:bot, left:right]
-        'title' : 'Hawaii',
+        'title' : "'Au'au Channel, Hawaii",
         'xlabel': 'Lon [deg]',
         'ylabel': 'Lat [deg]',
         'ticks' : '%.4g',
         'slope_max' : None,
         'depth_max' : None,
+        'depth_filter' : None,
         'num_ticks' : 3,
         'nodata' : None,
         'meta'  : {
@@ -158,12 +191,13 @@ BathyData = {
         'crop'  : None,
             # crop  = [top, bot, left, right]
             # bathy = bathy_im[top:bot, left:right]
-        'title' : 'Hawaii',
+        'title' : "'Au'au Channel, Hawaii",
         'xlabel': 'Lon [deg]',
         'ylabel': 'Lat [deg]',
         'ticks' : '%.4g',
         'slope_max' : None,
         'depth_max' : None,
+        'depth_filter' : None,        
         'num_ticks' : 3,
         'nodata' : None,
         'meta'  : {
@@ -187,6 +221,7 @@ BathyData = {
         'ticks' : '%.2g',
         'slope_max' : None,
         'depth_max' : None,
+        'depth_filter' : None,
         'num_ticks' : 3,
         'meta'  : None,
     },

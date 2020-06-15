@@ -82,6 +82,10 @@ class SlocumFlightController(object):
             'm_vx_lmc',
             'm_vy_lmc',
 
+            # Energy Variables
+            'm_coulomb_amphr',
+            'm_thruster_watthr',
+
             # Miscellaneous Variables
             'm_appear_to_be_at_surface',
             'm_science_clothesline_lag',

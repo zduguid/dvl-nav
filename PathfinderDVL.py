@@ -58,6 +58,11 @@ class PathfinderDVL(object):
             'rel_vel_dvl_v',
             'rel_vel_dvl_w',
 
+            # ocean current velocities (via propagation methods)
+            'ocn_vel_u',
+            'ocn_vel_v',
+            'ocn_vel_w',
+
             # absolute velocities (over ground velocities)
             'abs_vel_btm_u',
             'abs_vel_btm_v',
@@ -75,7 +80,10 @@ class PathfinderDVL(object):
             'rel_pos_z',
             'origin_x',
             'origin_y',
+            
+            # miscellaneous
             'angle_of_attack',
+            'num_good_vel_bins',
 
             # seafloor information 
             # ex: seafloor depth

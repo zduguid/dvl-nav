@@ -677,6 +677,7 @@ class PathfinderEnsemble(PathfinderDVL):
         beam_w = 2
         var_size  = struct.calcsize(var_format)
         velocity0 = []
+        num_good_vel_bins_flag = False
 
         # only parse velocity water profile data to save processing time
         if var_name == 'velocity':
@@ -702,6 +703,9 @@ class PathfinderEnsemble(PathfinderDVL):
                     if (var_name == 'velocity'):
                         if (data_val == self.BAD_VELOCITY):
                             self.set_data(label, np.NaN)
+                            if not num_good_vel_bins_flag:
+                                self.set_data('num_good_vel_bins', bin_num-1)
+                                num_good_vel_bins_flag = True
                         elif (beam_num != ERROR_BEAM_NUM):
                             velocity0.append(data_val*self.MM_TO_M)
                         else: 

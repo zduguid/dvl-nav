@@ -6,6 +6,11 @@
 
 <!-----------------------------------------------
 Most Recent Changes:
+- added new class PathfinderUtils to help with water column processing
+  (motivation for this was the shear propagation method)
+    + TODO need to be weary of recursion limit errors for long dives
+    + TODO not currently averaging 
+
 
 Changes Before Commit: 
 - add UTM conversion function to pathfinder class? or keep in notebook?
