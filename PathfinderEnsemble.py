@@ -478,11 +478,13 @@ class PathfinderEnsemble(PathfinderDVL):
             return
 
         # extract position information from previous ensemble 
+        #   + performs odometry without computation of ocean currents
+        #   + odometry with water column currents is not embedded right now
         prev_origin_x  = self.prev_ensemble.get_data('origin_x')
         prev_origin_y  = self.prev_ensemble.get_data('origin_y')
-        prev_rel_pos_x = self.prev_ensemble.get_data('rel_pos_x')
-        prev_rel_pos_y = self.prev_ensemble.get_data('rel_pos_y')
-        prev_rel_pos_z = self.prev_ensemble.get_data('rel_pos_z')
+        prev_rel_pos_x = self.prev_ensemble.get_data('rel_pos_x_dvl_dr')
+        prev_rel_pos_y = self.prev_ensemble.get_data('rel_pos_y_dvl_dr')
+        prev_rel_pos_z = self.prev_ensemble.get_data('rel_pos_z_dvl_dr')
         prev_depth     = self.prev_ensemble.get_data('depth')
         prev_pitch     = self.prev_ensemble.get_data('pitch')
         prev_t         = self.prev_ensemble.get_data('time') 
@@ -508,12 +510,13 @@ class PathfinderEnsemble(PathfinderDVL):
             if vel_label not in vel_options:
                 raise ValueError('bad velocity source: %s' % (vel_label))
             # update relative position using bottom track velocity 
+            delta_z = self.delta_z_pressure
             self.set_data('delta_x',self.delta_t*self.get_data(vel_label+'_u'))
             self.set_data('delta_y',self.delta_t*self.get_data(vel_label+'_v'))
             self.set_data('delta_z',self.delta_t*self.get_data(vel_label+'_w'))
-            self.set_data('rel_pos_x', prev_rel_pos_x + self.delta_x)
-            self.set_data('rel_pos_y', prev_rel_pos_y + self.delta_y)
-            self.set_data('rel_pos_z', prev_rel_pos_z + self.delta_z_pressure)
+            self.set_data('rel_pos_x_dvl_dr', prev_rel_pos_x + self.delta_x)
+            self.set_data('rel_pos_y_dvl_dr', prev_rel_pos_y + self.delta_y)
+            self.set_data('rel_pos_z_dvl_dr', prev_rel_pos_z +      delta_z)
 
         # helper function for assessing if bottom track data is valid
         def valid_bottom_track():
@@ -573,9 +576,9 @@ class PathfinderEnsemble(PathfinderDVL):
         if self.gps_fix:
             self.set_data('origin_x', self.gps_fix[0])
             self.set_data('origin_y', self.gps_fix[0])
-            self.set_data('rel_pos_x', 0)
-            self.set_data('rel_pos_y', 0)
-            self.set_data('rel_pos_z', 0)
+            self.set_data('rel_pos_x_dvl_dr', 0)
+            self.set_data('rel_pos_y_dvl_dr', 0)
+            self.set_data('rel_pos_z_dvl_dr', 0)
         else:
             self.set_data('origin_x', prev_origin_x)
             self.set_data('origin_y', prev_rel_pos_y)
@@ -619,7 +622,7 @@ class PathfinderEnsemble(PathfinderDVL):
 
         Returns: (u,v,w) velocity vector in desired coordinate frame.
         """
-        BIAS_PITCH   = 12  # [deg]
+        BIAS_PITCH   =  8  # [deg]
         BIAS_ROLL    = -1  # [deg]
         BIAS_HEADING =  0  # [deg]
         u0,v0,w0     = velocity0

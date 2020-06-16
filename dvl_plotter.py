@@ -195,10 +195,10 @@ def plot_odometry_and_dr_utm(df_all, glider, save_name=None):
 ###############################################################################
 def plot_odometry_and_dr(ts_pd0, ts_dbd_all, glider, save_name=None):
     # sub-select a portion of glider flight computer variables
-    start  = datetime.datetime.fromtimestamp(ts_pd0.df.time[0])
-    end    = datetime.datetime.fromtimestamp(ts_pd0.df.time[-1])
-    dur    = end - start 
-    df_dbd = ts_dbd_all.df[str(start):str(end)].copy()
+    start_t = datetime.datetime.fromtimestamp(ts_pd0.df.time[0])
+    end_t   = datetime.datetime.fromtimestamp(ts_pd0.df.time[-1])
+    dur     = end_t - start_t 
+    df_dbd  = ts_dbd_all.df[str(start_t):str(end_t)].copy()
 
     # initialize the plot
     sns.set(font_scale = 1.5)
@@ -305,11 +305,11 @@ def plot_profile_and_odometry(ts, glider, save_name=None):
     else:         plt.savefig('/Users/zduguid/Desktop/fig/tmp.png')
 
 
-
 ###############################################################################
 # PLOT PROFILE AND ODOMETRY AND DEAD-RECKONED
 ###############################################################################
-def plot_profile_and_odometry_and_dr(ts_pd0,ts_dbd_all,glider,save_name=None):
+def plot_profile_and_odometry_and_dr(ts_pd0,ts_dbd_all, use_wc=True,
+    save_name=None):
     sns.set(font_scale = 1.5)
     fig, ax = plt.subplots(1,2, figsize=(15,8))
 
@@ -343,7 +343,8 @@ def plot_profile_and_odometry_and_dr(ts_pd0,ts_dbd_all,glider,save_name=None):
     ax[0].set_ylabel('Depth [m]')
     ax[0].set_xlabel('Time')
     ax[0].set_title('Dive Profile')
-    ax[0].legend(['Depth [m]', 'Altitude [m]'],loc='lower left', frameon=True)
+    ax[0].legend(['Depth [m]', 'Altitude [m]'], loc='best', 
+        frameon=True, framealpha=0.6, fontsize='small')
 
 
 
@@ -351,23 +352,42 @@ def plot_profile_and_odometry_and_dr(ts_pd0,ts_dbd_all,glider,save_name=None):
     # PLOT ODOMETRY AND DEAD-RECKONED ###########
     #############################################
     # sub-select a portion of glider flight computer variables
-    start  = datetime.datetime.fromtimestamp(ts_pd0.df.time[0])
-    end    = datetime.datetime.fromtimestamp(ts_pd0.df.time[-1])
-    dur    = end - start 
-    df_dbd = ts_dbd_all.df[str(start):str(end)].copy()
+    start_t = datetime.datetime.fromtimestamp(ts_pd0.df.time[0])
+    end_t   = datetime.datetime.fromtimestamp(ts_pd0.df.time[-1])
+    dur     = end_t - start_t 
+    df_dbd  = ts_dbd_all.df[str(start_t):str(end_t)].copy()
+
+    # extract start_t position "origin" from the glider flight data 
+    for t in range(len(df_dbd)):
+        if not np.isnan(df_dbd.m_x_lmc[t]):
+            dbd_origin_x = df_dbd.m_x_lmc[t]
+            dbd_origin_y = df_dbd.m_y_lmc[t]
+            break
+    if use_wc:
+        sns.scatterplot(
+            x=ts_pd0.df.rel_pos_x,
+            y=ts_pd0.df.rel_pos_y,
+            color='tab:orange',
+            label='DVL Odometry',
+            linewidth=0,
+            s=8,
+            data=ts_pd0.df,
+            ax=ax[1],
+        )
+    else:
+        sns.scatterplot(
+            x=ts_pd0.df.rel_pos_x_dvl_dr,
+            y=ts_pd0.df.rel_pos_y_dvl_dr,
+            color='tab:orange',
+            label='DVL Odometry',
+            linewidth=0,
+            s=8,
+            data=ts_pd0.df,
+            ax=ax[1],
+        )
     sns.scatterplot(
-        x=ts_pd0.df.rel_pos_x,
-        y=ts_pd0.df.rel_pos_y,
-        color='tab:orange',
-        label='DVL Odometry',
-        linewidth=0,
-        s=8,
-        data=ts_pd0.df,
-        ax=ax[1],
-    )
-    sns.scatterplot(
-        x=df_dbd.m_x_lmc,
-        y=df_dbd.m_y_lmc,
+        x=df_dbd.m_x_lmc - dbd_origin_x,
+        y=df_dbd.m_y_lmc - dbd_origin_y,
         color='tab:blue',
         label='Dead-Reckoned',
         linewidth=0,
@@ -376,8 +396,8 @@ def plot_profile_and_odometry_and_dr(ts_pd0,ts_dbd_all,glider,save_name=None):
         ax=ax[1],
     )
     sns.scatterplot(
-        x=df_dbd.m_gps_x_lmc, 
-        y=df_dbd.m_gps_y_lmc,
+        x=df_dbd.m_gps_x_lmc - dbd_origin_x, 
+        y=df_dbd.m_gps_y_lmc - dbd_origin_y,
         marker='X',
         color='tab:red', 
         label='GPS Fix',
@@ -387,7 +407,8 @@ def plot_profile_and_odometry_and_dr(ts_pd0,ts_dbd_all,glider,save_name=None):
     )
 
     # TODO -- can add marker for when TAN is able to recognize a feature
-    lgnd = ax[1].legend(frameon=True,loc='lower right')
+    lgnd = ax[1].legend(frameon=True, framealpha=0.6, loc='best', 
+        fontsize='small')
     lgnd.legendHandles[0]._sizes = [60]
     lgnd.legendHandles[1]._sizes = [60]
     lgnd.legendHandles[2]._sizes = [200]
@@ -397,12 +418,73 @@ def plot_profile_and_odometry_and_dr(ts_pd0,ts_dbd_all,glider,save_name=None):
     plt.axis('equal')
     plt.suptitle('DVL Odometry with Water Column Sensing', fontweight='bold')
     plt.title('Odometry in LMC')
-    plt.xlabel('X Position [m]')
-    plt.ylabel('Y Position [m]')
+    plt.xlabel('X position [m]')
+    plt.ylabel('Y position [m]')
     plt.subplots_adjust(wspace=0.3)
-    if save_name: plt.savefig(save_name)
+    if save_name: plt.savefig('/Users/zduguid/Desktop/fig/%s' % save_name)
     else:         plt.savefig('/Users/zduguid/Desktop/fig/tmp.png')
 
+
+###############################################################################
+# PLOT WATER COLUMN
+###############################################################################
+def plot_water_column_currents(voc_u_list, voc_v_list, voc_w_list, voc_z_list, 
+    save_name=None):
+    sns.set(font_scale = 1.5)
+    fig = plt.figure(figsize=(15,8))
+
+    # plot ocean currents in u-v plane
+    ax = fig.add_subplot(1, 2, 1, aspect='equal')
+    c = np.arctan2(voc_u_list,voc_v_list)
+    sns.scatterplot(
+        voc_u_list,
+        voc_v_list,
+        voc_z_list,
+        s=50,
+        palette='inferno_r',
+    )
+    plt.title('Water Column, 2D View')
+    plt.xlabel('Eastward [m/s]')
+    plt.ylabel('Northward [m/s]')
+    plt.legend(title='Depth [m]', fontsize='small', loc='best',
+        framealpha=0.6).get_title().set_fontsize('small')
+    ax.set_xlim(-0.4,0.4)
+    ax.set_ylim(-0.4,0.4)
+
+    # plot 3D quiver plot
+    ax = fig.add_subplot(1, 2, 2, projection='3d')
+
+    # voc_u,voc_v,voc_w,voc_z
+    u = voc_u_list[pd.notnull(voc_u_list)]
+    v = voc_v_list[pd.notnull(voc_u_list)]
+    w = voc_w_list[pd.notnull(voc_u_list)]
+    z = voc_z_list[pd.notnull(voc_u_list)]
+    x = np.zeros(u.shape)
+    y = np.zeros(u.shape)
+
+    # convert data to RGB color map for quiver plot 
+    c = (np.arctan2(u,v) + np.pi)/(2*np.pi)
+    c = np.concatenate((c, np.repeat(c, 2)))
+    c = plt.cm.twilight_shifted(c) 
+
+    # generate quiver plot
+    ax.quiver(x, y, -z, u, v, w, colors=c,length=1,normalize=False)
+    ax.patch.set_facecolor('white')
+    ax.w_xaxis.set_pane_color((234/255, 234/255, 242/255, 1.0))
+    ax.w_yaxis.set_pane_color((234/255, 234/255, 242/255, 1.0))
+    ax.w_zaxis.set_pane_color((234/255, 234/255, 242/255, 1.0))
+    ax.set_xlabel('\n\nEastward [m/s]')
+    ax.set_ylabel('\n\nNorthward [m/s]')
+    ax.set_zlabel('\n\nDepth [m]')
+    ax.azim = -110   # [deg]
+    ax.elev =   30   # [deg]
+    ax_max  =    0.4 # [m/s]
+    plt.xlim(-ax_max,ax_max)
+    plt.ylim(-ax_max,ax_max)
+    plt.title('Water Column, 3D View')
+    plt.suptitle('Water Column Currents', fontweight='bold')
+    if save_name: plt.savefig('/Users/zduguid/Desktop/fig/%s' % save_name)
+    else:         plt.savefig('/Users/zduguid/Desktop/fig/tmp.png')
 
 
 ###############################################################################
@@ -600,59 +682,6 @@ def plot_velocity_northward(ts, glider, save_name=None, roll_size=10,
             label='pitch'
         )
     dt = datetime.datetime.fromtimestamp(ts.df.time[0]).replace(microsecond=0)
-    plt.suptitle('Northward Component of Velocity', fontweight='bold')
-    plt.title('%s Kolumbo Volcano %s' % (unit_name[glider], dt.isoformat(),))
-    plt.xlabel('Time')
-    plt.ylabel('Velocity [m/s]')
-    plt.savefig('/Users/zduguid/Desktop/fig/tmp.png')
-    if save_name: plt.savefig(save_name)
-    else:         plt.savefig('/Users/zduguid/Desktop/fig/tmp.png')
-
-
-###############################################################################
-# PLOT VELOCITIES (TODO) 
-###############################################################################
-def plot_velocity_todo(ts, glider, save_name=None, roll_size=10):
-    sns.set(font_scale = 1.5)
-    fig, ax = plt.subplots(figsize=(15,8))
-    sns.scatterplot(
-        x=ts.df.time,
-        y=-ts.df.vel_bin0_beam1 - (-ts.df.vel_bin1_beam1),
-        color='tab:blue',
-        data=ts.df,
-        s=10,
-        linewidth=0,
-        label='bin0 - bin1'
-    )
-    sns.scatterplot(
-        x=ts.df.time,
-        y=-ts.df.vel_bin1_beam1 - (-ts.df.vel_bin2_beam1),
-        color='tab:orange',
-        data=ts.df,
-        s=10,
-        linewidth=0,
-        label='bin1 - bin2'
-    )
-    sns.scatterplot(
-        x=ts.df.time,
-        y=-ts.df.vel_bin2_beam1 - (-ts.df.vel_bin3_beam1),
-        color='tab:green',
-        data=ts.df,
-        s=10,
-        linewidth=0,
-        label='bin2 - bin3'
-    )
-    sns.scatterplot(
-        x=ts.df.time,
-        y=-ts.df.vel_bin3_beam1 - (-ts.df.vel_bin4_beam1),
-        color='tab:red',
-        data=ts.df,
-        s=10,
-        linewidth=0,
-        label='bin3 - bin4'
-    )
-    dt = datetime.datetime.fromtimestamp(ts.df.time[0]).replace(microsecond=0)
-    ax.set_ylim(-0.25,0.25)
     plt.suptitle('Northward Component of Velocity', fontweight='bold')
     plt.title('%s Kolumbo Volcano %s' % (unit_name[glider], dt.isoformat(),))
     plt.xlabel('Time')

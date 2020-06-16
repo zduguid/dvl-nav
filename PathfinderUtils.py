@@ -34,7 +34,8 @@ class OceanCurrent(object):
         return OceanCurrent(self.u, self.v, self.w)
 
     def is_none(self):
-        return(self.u==None and self.v==None and self.w==None)
+        return((self.u==None     and self.v==None     and self.w==None) or 
+               (np.isnan(self.u) and np.isnan(self.v)))
 
     def subtract_shear(self, shear):
         """Subtract one OceanCurrent from another OceanCurrent."""
@@ -444,6 +445,8 @@ class ShearNode(object):
             water_col: water column object that ShearNode is a part of 
             shear_list: the velocity shears recorded by the DVL by comparing
                 the dead-reckoned velocity and the DVL bin velocities.
+            pitch: pitch of the glider in degrees
+            roll: roll of the glider in degrees 
         """
         self.z_true    = z_true
         self.z_bin     = z_bin
