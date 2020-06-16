@@ -619,7 +619,7 @@ class PathfinderEnsemble(PathfinderDVL):
 
         Returns: (u,v,w) velocity vector in desired coordinate frame.
         """
-        BIAS_PITCH   =  8  # [deg]
+        BIAS_PITCH   = 12  # [deg]
         BIAS_ROLL    = -1  # [deg]
         BIAS_HEADING =  0  # [deg]
         u0,v0,w0     = velocity0
@@ -704,7 +704,7 @@ class PathfinderEnsemble(PathfinderDVL):
                         if (data_val == self.BAD_VELOCITY):
                             self.set_data(label, np.NaN)
                             if not num_good_vel_bins_flag:
-                                self.set_data('num_good_vel_bins', bin_num-1)
+                                self.set_data('num_good_vel_bins', bin_num)
                                 num_good_vel_bins_flag = True
                         elif (beam_num != ERROR_BEAM_NUM):
                             velocity0.append(data_val*self.MM_TO_M)

@@ -78,6 +78,9 @@ class PathfinderDVL(object):
             'rel_pos_x',
             'rel_pos_y',
             'rel_pos_z',
+            'rel_pos_x_dvl_dr',
+            'rel_pos_y_dvl_dr',
+            'rel_pos_z_dvl_dr',
             'origin_x',
             'origin_y',
             

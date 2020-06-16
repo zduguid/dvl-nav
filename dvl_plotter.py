@@ -134,7 +134,7 @@ def plot_m_odometry_dr(ts_flight, glider, save_name=None):
 ###############################################################################
 # PLOT ODOMETRY AND DEAD-RECKONED
 ###############################################################################
-def plot_odometry_and_dr(df, glider, save_name=None):
+def plot_odometry_and_dr_utm(df_all, glider, save_name=None):
     sns.set(font_scale = 1.5)
     fig, ax = plt.subplots(figsize=(10,8))
     sns.scatterplot(
@@ -144,34 +144,34 @@ def plot_odometry_and_dr(df, glider, save_name=None):
         label='Dead-Reckoned',
         linewidth=0,
         s=8,
-        data=df
+        data=df_all
     )
     sns.scatterplot(
-        x=df.utm_odo_x,
-        y=df.utm_odo_y,
+        x=df_all.utm_odo_x,
+        y=df_all.utm_odo_y,
         color='tab:orange',
         label='DVL Odometry',
         linewidth=0,
         s=8,
-        data=df
+        data=df_all
     )
     sns.scatterplot(
-        x=df.utm_gps_x, 
-        y=df.utm_gps_y,
+        x=df_all.utm_gps_x, 
+        y=df_all.utm_gps_y,
         marker='X',
         color='tab:red', 
         label='GPS Fix',
         s=200,
-        data=df,
+        data=df_all,
     )
     sns.scatterplot(
-        x=df.utm_wpt_x, 
-        y=df.utm_wpt_y,
+        x=df_all.utm_wpt_x, 
+        y=df_all.utm_wpt_y,
         marker='o',
         color='tab:green', 
         label='Waypoint Target',
         s=100,
-        data=df,
+        data=df_all,
     )
     # TODO -- can add marker for when TAN is able to recognize a feature
     lgnd = ax.legend(frameon=True)
@@ -181,6 +181,63 @@ def plot_odometry_and_dr(df, glider, save_name=None):
     if len(lgnd.legendHandles) == 4:
         lgnd.legendHandles[3]._sizes = [100]
     dt = df.index[0].replace(microsecond=0)
+    plt.axis('equal')
+    plt.suptitle('DVL Odometry', fontweight='bold')
+    plt.title('%s Kolumbo Volcano %s' % (unit_name[glider], dt.isoformat(),))
+    plt.xlabel('x position [m]')
+    plt.ylabel('y position [m]')
+    if save_name: plt.savefig(save_name)
+    else:         plt.savefig('/Users/zduguid/Desktop/fig/tmp.png')
+
+
+###############################################################################
+# PLOT ODOMETRY AND DEAD-RECKONED
+###############################################################################
+def plot_odometry_and_dr(ts_pd0, ts_dbd_all, glider, save_name=None):
+    # sub-select a portion of glider flight computer variables
+    start  = datetime.datetime.fromtimestamp(ts_pd0.df.time[0])
+    end    = datetime.datetime.fromtimestamp(ts_pd0.df.time[-1])
+    dur    = end - start 
+    df_dbd = ts_dbd_all.df[str(start):str(end)].copy()
+
+    # initialize the plot
+    sns.set(font_scale = 1.5)
+    fig, ax = plt.subplots(figsize=(10,8))
+    sns.scatterplot(
+        x=df_dbd.m_x_lmc,
+        y=df_dbd.m_y_lmc,
+        color='tab:blue',
+        label='Dead-Reckoned',
+        linewidth=0,
+        s=8,
+        data=df_dbd
+    )
+    sns.scatterplot(
+        x=ts_pd0.df.rel_pos_x,
+        y=ts_pd0.df.rel_pos_y,
+        color='tab:orange',
+        label='DVL Odometry',
+        linewidth=0,
+        s=8,
+        data=ts_pd0.df
+    )
+    sns.scatterplot(
+        x=df_dbd.m_gps_x_lmc, 
+        y=df_dbd.m_gps_y_lmc,
+        marker='X',
+        color='tab:red', 
+        label='GPS Fix',
+        s=200,
+        data=df_dbd,
+    )
+    # TODO -- can add marker for when TAN is able to recognize a feature
+    lgnd = ax.legend(frameon=True)
+    lgnd.legendHandles[0]._sizes = [60]
+    lgnd.legendHandles[1]._sizes = [60]
+    lgnd.legendHandles[2]._sizes = [200]
+    if len(lgnd.legendHandles) == 4:
+        lgnd.legendHandles[3]._sizes = [100]
+    dt = df_dbd.index[0].replace(microsecond=0)
     plt.axis('equal')
     plt.suptitle('DVL Odometry', fontweight='bold')
     plt.title('%s Kolumbo Volcano %s' % (unit_name[glider], dt.isoformat(),))
@@ -246,6 +303,106 @@ def plot_profile_and_odometry(ts, glider, save_name=None):
     plt.legend(loc='lower right')
     if save_name: plt.savefig(save_name)
     else:         plt.savefig('/Users/zduguid/Desktop/fig/tmp.png')
+
+
+
+###############################################################################
+# PLOT PROFILE AND ODOMETRY AND DEAD-RECKONED
+###############################################################################
+def plot_profile_and_odometry_and_dr(ts_pd0,ts_dbd_all,glider,save_name=None):
+    sns.set(font_scale = 1.5)
+    fig, ax = plt.subplots(1,2, figsize=(15,8))
+
+
+    #############################################
+    # PLOT PROFILE ##############################
+    #############################################
+    depth = -1 * ts_pd0.df['depth']
+    line_plot = depth.plot(figsize=(15,8), linewidth=3, color='tab:orange', ax=ax[0])
+
+    # compute altitude estimate from the four vertical range estimates
+    # - does not account for pitch and roll of the vehicle 
+    h1 = ts_pd0.df['btm_beam0_range']
+    h2 = ts_pd0.df['btm_beam1_range']
+    h3 = ts_pd0.df['btm_beam2_range']
+    h4 = ts_pd0.df['btm_beam3_range']
+    altitude = depth - ((h1*h2)/(h1 + h2) + (h3*h4)/(h3 + h4))
+    altitude.plot(linewidth=3, color='tab:blue', zorder=1, ax=ax[0])
+
+    # bottom_track slant range data 
+    bt_ranges = [
+        'btm_beam0_range',
+        'btm_beam1_range',
+        'btm_beam2_range',
+        'btm_beam3_range'
+    ]
+    bt_colors = ['powderblue','darkturquoise','lightsteelblue','deepskyblue']
+    for i in range(len(bt_ranges)):
+        bt_range  = depth - ts_pd0.df[bt_ranges[i]]
+        bt_range.plot(linewidth=1, color=bt_colors[i], zorder=0, ax=ax[0])
+    ax[0].set_ylabel('Depth [m]')
+    ax[0].set_xlabel('Time')
+    ax[0].set_title('Dive Profile')
+    ax[0].legend(['Depth [m]', 'Altitude [m]'],loc='lower left', frameon=True)
+
+
+
+    #############################################
+    # PLOT ODOMETRY AND DEAD-RECKONED ###########
+    #############################################
+    # sub-select a portion of glider flight computer variables
+    start  = datetime.datetime.fromtimestamp(ts_pd0.df.time[0])
+    end    = datetime.datetime.fromtimestamp(ts_pd0.df.time[-1])
+    dur    = end - start 
+    df_dbd = ts_dbd_all.df[str(start):str(end)].copy()
+    sns.scatterplot(
+        x=ts_pd0.df.rel_pos_x,
+        y=ts_pd0.df.rel_pos_y,
+        color='tab:orange',
+        label='DVL Odometry',
+        linewidth=0,
+        s=8,
+        data=ts_pd0.df,
+        ax=ax[1],
+    )
+    sns.scatterplot(
+        x=df_dbd.m_x_lmc,
+        y=df_dbd.m_y_lmc,
+        color='tab:blue',
+        label='Dead-Reckoned',
+        linewidth=0,
+        s=8,
+        data=df_dbd,
+        ax=ax[1],
+    )
+    sns.scatterplot(
+        x=df_dbd.m_gps_x_lmc, 
+        y=df_dbd.m_gps_y_lmc,
+        marker='X',
+        color='tab:red', 
+        label='GPS Fix',
+        s=200,
+        data=df_dbd,
+        ax=ax[1],
+    )
+
+    # TODO -- can add marker for when TAN is able to recognize a feature
+    lgnd = ax[1].legend(frameon=True,loc='lower right')
+    lgnd.legendHandles[0]._sizes = [60]
+    lgnd.legendHandles[1]._sizes = [60]
+    lgnd.legendHandles[2]._sizes = [200]
+    if len(lgnd.legendHandles) == 4:
+        lgnd.legendHandles[3]._sizes = [100]
+    dt = df_dbd.index[0].replace(microsecond=0)
+    plt.axis('equal')
+    plt.suptitle('DVL Odometry with Water Column Sensing', fontweight='bold')
+    plt.title('Odometry in LMC')
+    plt.xlabel('X Position [m]')
+    plt.ylabel('Y Position [m]')
+    plt.subplots_adjust(wspace=0.3)
+    if save_name: plt.savefig(save_name)
+    else:         plt.savefig('/Users/zduguid/Desktop/fig/tmp.png')
+
 
 
 ###############################################################################

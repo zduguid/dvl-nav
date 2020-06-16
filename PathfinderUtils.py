@@ -16,6 +16,10 @@ class OceanCurrent(object):
         if not((u==None and v==None and w==None) or \
                (u!=None and v!=None and w!=None)):
             raise ValueError('bad ocean current',u,v,w)
+        if not self.is_none():
+            self.mag = np.linalg.norm([self.u,self.v,self.w])
+        else:
+            self.mag = np.NaN
 
     def __str__(self):
         if self.is_none():
@@ -55,7 +59,7 @@ class OceanCurrent(object):
 
 
 class WaterColumn(object):
-    def __init__(self,bin_len=2,bin0_dist=2.91,max_depth=1000,bin_filter=0):
+    def __init__(self,bin_len=2,bin0_dist=2.91,max_depth=1000,start_filter=0,end_filter=0, voc_mag_filter=0.5, voc_delta_mag_filter=0.30):
         """Represents water column currents in an absolute reference frame.
 
         Uses measurements from Doppler Velocity Log (DVL) to determine water
@@ -67,16 +71,25 @@ class WaterColumn(object):
             bin_len: length of DVL depth bin.
             bin0_dist: distance from transducer head to middle of first bin.
             max_depth: max depth considered in the water column.
-            bin_filter: used to filter out the first number of DVL bins from 
+            start_filter: used to filter out the first number of DVL bins from 
+                the propagation process.
+            end_filter: used to filter out the last number of DVL bins from 
                 the propagation process.
         """
-        self._BIN_LEN    = bin_len
-        self._BIN0_DIST  = bin0_dist
-        self._MAX_DEPTH  = max_depth
-        self._BIN_FILTER = bin_filter
-        self._WC_BIN_LEN = int(bin_len)
+        self._BIN_LEN      = bin_len
+        self._BIN0_DIST    = bin0_dist
+        self._MAX_DEPTH    = max_depth
+        self._START_FILTER = start_filter
+        self._END_FILTER   = end_filter
+        self._WC_BIN_LEN   = int(bin_len)
         self.shear_node_dict = {i : [] for i in 
                                range(0,self.MAX_DEPTH,self.WC_BIN_LEN)}
+        self.avg_voc_dict    = {i : OceanCurrent() for i in 
+                               range(0,self.MAX_DEPTH,self.WC_BIN_LEN)}
+
+        # tuning parameters for ocean current estimation
+        self.voc_mag_filter = voc_mag_filter
+        self.voc_delta_mag_filter = voc_delta_mag_filter
 
     def __str__(self):
         string  = 'Water Column (depth=%0.f) \n' % (self.MAX_DEPTH)
@@ -101,8 +114,12 @@ class WaterColumn(object):
         return self._MAX_DEPTH
 
     @property
-    def BIN_FILTER(self):
-        return self._BIN_FILTER
+    def START_FILTER(self):
+        return self._START_FILTER
+
+    @property
+    def END_FILTER(self):
+        return self._END_FILTER
 
     @property
     def WC_BIN_LEN(self):
@@ -126,14 +143,83 @@ class WaterColumn(object):
         return(int(z_true) - int(z_true)%self.WC_BIN_LEN)
 
 
+    def mag_filter(self, shear_node):
+        """Return true iff node meets magnitude reqs on voc and delta"""
+        voc = shear_node.voc
+        voc_delta = shear_node.voc_delta
+        if not np.isnan(voc_delta.mag):
+            if voc_delta.mag > self.voc_delta_mag_filter:
+                return(False)
+        if not np.isnan(voc.mag):
+            if voc.mag > self.voc_mag_filter:
+                return(False)
+        return(True)
+
+
     def get_voc_at_depth(self,z):
-        """Get the water column currents recorded at a particular depth.
-        """
+        """Get the water column currents recorded at a particular depth."""
         z_bin = self.get_wc_bin(z)
         return(self.shear_node_dict[z_bin])
 
 
-    def add_shear_node(self, z_true, t, shear_list, voc_ref, 
+    def compute_averages(self):
+        """Computes average water column currents for each depth bin."""
+        # iterate over the depth bins 
+        voc_u_list = []
+        voc_v_list = []
+        voc_w_list = []
+        z_list     = []
+        for z in self.avg_voc_dict.keys():
+            count     = 0
+            cum_voc_u = 0
+            cum_voc_v = 0
+            cum_voc_w = 0 
+            node_list = self.get_voc_at_depth(z)
+
+            # iterate over the observations at each depth bin
+            for shear_node in node_list:
+                voc = shear_node.voc
+                if not(voc.is_none()):
+                    # filter out large values when computing averages
+                    if voc.mag < self.voc_mag_filter:
+                        count     += 1
+                        cum_voc_u += voc.u
+                        cum_voc_v += voc.v
+                        cum_voc_w += voc.w
+
+            # report averages when data is available
+            if count > 0:
+                voc_avg = OceanCurrent(
+                            cum_voc_u/count, 
+                            cum_voc_v/count, 
+                            cum_voc_w/count
+                            )
+                self.avg_voc_dict[z] = voc_avg
+                voc_u_list.append(voc_avg.u)
+                voc_v_list.append(voc_avg.v)
+                voc_w_list.append(voc_avg.w)
+                z_list.append(z)
+            else:
+                voc_u_list.append(np.NaN)
+                voc_v_list.append(np.NaN)
+                voc_w_list.append(np.NaN)
+                z_list.append(z)
+        return (np.array(voc_u_list), 
+                np.array(voc_v_list), 
+                np.array(voc_w_list),
+                np.array(z_list))
+
+    def averages_to_str(self):
+        """Converts averages to string format after they have been computed."""
+        string  = 'Water Column (depth=%0.f) \n' % (self.MAX_DEPTH)
+        for z in self.avg_voc_dict.keys():
+            string += '|z =%3d| ' % z 
+            string += str(self.avg_voc_dict[z])
+            string += '\n'
+        return(string)
+
+
+    def add_shear_node(self, z_true, t, shear_list, voc_ref=OceanCurrent(), 
         direction='descending', pitch=0, roll=0):
         """Adds a new DVL observation to the water column object.
 
@@ -285,7 +371,7 @@ class WaterColumn(object):
             shear_list: list of observed shears to propagate forward
         """
         # iterate through shear list to make new child shear nodes
-        for i in range(self.BIN_FILTER, len(shear_list)):
+        for i in range(self.START_FILTER, len(shear_list)-self.END_FILTER):
 
             # find new bin for child node 
             child_z_true = self.get_z_true(parent, i)
@@ -311,8 +397,9 @@ class WaterColumn(object):
                 if not child_voc.is_none():
                     child_shear_node.set_fwd_prop(True)
 
-                # add new shear node to the water column
-                self.shear_node_dict[child_z_bin].append(child_shear_node)
+                # only add child nodes with reasonable deltas 
+                if  self.mag_filter(child_shear_node):
+                    self.shear_node_dict[child_z_bin].append(child_shear_node)
 
 
     def back_propagation(self, back_prop_node, voc):
@@ -339,6 +426,7 @@ class WaterColumn(object):
                 child_voc = back_node.voc.subtract_shear(child_node.voc_delta)
                 child_node.set_voc(child_voc)
                 child_node.set_bck_prop(True)
+
 
 
 class ShearNode(object):
@@ -398,9 +486,6 @@ class ShearNode(object):
 
         If not yet specified, back propagation will be called later """
         return(not self.voc is None)
-
-    def is_observation(self):
-        return (self.btm_track or self.fwd_prop or self.bck_prop)
 
     def set_voc(self,val):
         """updates ocean current velocity"""
