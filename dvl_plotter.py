@@ -343,7 +343,7 @@ def plot_profile_and_odometry_and_dr(ts_pd0,ts_dbd_all, use_wc=True,
     ax[0].set_ylabel('Depth [m]')
     ax[0].set_xlabel('Time')
     ax[0].set_title('Dive Profile')
-    ax[0].legend(['Depth [m]', 'Altitude [m]'], loc='best', 
+    ax[0].legend(['Depth [m]', 'Altitude [m]'], loc='best',
         frameon=True, framealpha=0.6, fontsize='small')
 
 
@@ -373,6 +373,7 @@ def plot_profile_and_odometry_and_dr(ts_pd0,ts_dbd_all, use_wc=True,
             s=8,
             data=ts_pd0.df,
             ax=ax[1],
+            zorder=2,
         )
     else:
         sns.scatterplot(
@@ -394,6 +395,7 @@ def plot_profile_and_odometry_and_dr(ts_pd0,ts_dbd_all, use_wc=True,
         s=8,
         data=df_dbd,
         ax=ax[1],
+        zorder=1,
     )
     sns.scatterplot(
         x=df_dbd.m_gps_x_lmc - dbd_origin_x, 
@@ -404,6 +406,7 @@ def plot_profile_and_odometry_and_dr(ts_pd0,ts_dbd_all, use_wc=True,
         s=200,
         data=df_dbd,
         ax=ax[1],
+        zorder=5,
     )
 
     # TODO -- can add marker for when TAN is able to recognize a feature
@@ -432,6 +435,7 @@ def plot_water_column_currents(voc_u_list, voc_v_list, voc_w_list, voc_z_list,
     save_name=None):
     sns.set(font_scale = 1.5)
     fig = plt.figure(figsize=(15,8))
+    max_current = 1.0
 
     # plot ocean currents in u-v plane
     ax = fig.add_subplot(1, 2, 1, aspect='equal')
@@ -448,8 +452,8 @@ def plot_water_column_currents(voc_u_list, voc_v_list, voc_w_list, voc_z_list,
     plt.ylabel('Northward [m/s]')
     plt.legend(title='Depth [m]', fontsize='small', loc='best',
         framealpha=0.6).get_title().set_fontsize('small')
-    ax.set_xlim(-0.4,0.4)
-    ax.set_ylim(-0.4,0.4)
+    ax.set_xlim(-max_current,max_current)
+    ax.set_ylim(-max_current,max_current)
 
     # plot 3D quiver plot
     ax = fig.add_subplot(1, 2, 2, projection='3d')
@@ -478,9 +482,8 @@ def plot_water_column_currents(voc_u_list, voc_v_list, voc_w_list, voc_z_list,
     ax.set_zlabel('\n\nDepth [m]')
     ax.azim = -110   # [deg]
     ax.elev =   30   # [deg]
-    ax_max  =    0.4 # [m/s]
-    plt.xlim(-ax_max,ax_max)
-    plt.ylim(-ax_max,ax_max)
+    plt.xlim(-max_current,max_current)
+    plt.ylim(-max_current,max_current)
     plt.title('Water Column, 3D View')
     plt.suptitle('Water Column Currents', fontweight='bold')
     if save_name: plt.savefig('/Users/zduguid/Desktop/fig/%s' % save_name)
