@@ -450,10 +450,12 @@ def plot_water_column_currents(voc_u_list, voc_v_list, voc_w_list, voc_z_list,
     plt.title('Water Column, 2D View')
     plt.xlabel('Eastward [m/s]')
     plt.ylabel('Northward [m/s]')
-    plt.legend(title='Depth [m]', fontsize='small', loc='best',
-        framealpha=0.6).get_title().set_fontsize('small')
     ax.set_xlim(-max_current,max_current)
     ax.set_ylim(-max_current,max_current)
+    handles, labels = ax.get_legend_handles_labels()
+    plt.legend(title='Depth [m]', fontsize='small', loc='best',
+        framealpha=0.6, handles=handles[:-1], 
+        labels=labels[:-1]).get_title().set_fontsize('small')
 
     # plot 3D quiver plot
     ax = fig.add_subplot(1, 2, 2, projection='3d')
