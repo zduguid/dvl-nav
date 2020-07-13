@@ -32,6 +32,14 @@ class PathfinderDVL(object):
         self.BAD_BT_RANGE  = 0       # value that represents invalid range
         self.MAX_ENS_NUM   = 65536   # max number of ensembles before rollover
 
+        # mounting bias parameters 
+        self.BIAS_PITCH   =  8.0  # [deg]
+        self.BIAS_ROLL    =  0.0  # [deg]
+        self.BIAS_HEADING =  0.0  # [deg]
+        # self.BIAS_ROLL    =  4.0  # [deg]
+        # self.BIAS_HEADING = -3.0  # [deg]
+        self.JANUS_ANGLE  = 30    # [deg]
+
         # map from each variable group name to three letter abbreviation 
         self._data_abbreviations = {
             'fixed_leader'      : 'fld', 
@@ -89,8 +97,9 @@ class PathfinderDVL(object):
             'num_good_vel_bins',
 
             # seafloor information 
-            # ex: seafloor depth
-            # ex: seafloor surface normal (two values)
+            'bathy_factor_depth',
+            'bathy_factor_slope', 
+            'bathy_factor_orient',
         )
 
         # tuple of variables that are automatically reported by Pathfinder

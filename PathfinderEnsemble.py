@@ -8,6 +8,7 @@
 
 import numpy as np 
 import pandas as pd
+import scipy
 import struct
 import sys
 from datetime import datetime
@@ -583,6 +584,33 @@ class PathfinderEnsemble(PathfinderDVL):
             self.set_data('origin_x', prev_origin_x)
             self.set_data('origin_y', prev_rel_pos_y)
 
+        # compute three factors of bathymetry: depth, slope, and orient
+        self.get_bathy_factors()
+
+
+    def Qx(self, phi):
+        """Orthogonal rotation matrix about x-axis by angle phi
+        """
+        return(np.array([[           1,            0,            0],
+                         [           0,  np.cos(phi), -np.sin(phi)],
+                         [           0,  np.sin(phi),  np.cos(phi)]]))
+
+
+    def Qy(self, phi):
+        """Orthogonal rotation matrix about y-axis by angle phi
+        """
+        return(np.array([[ np.cos(phi),            0,  np.sin(phi)],
+                         [           0,            1,            0],
+                         [-np.sin(phi),            0,  np.cos(phi)]]))
+
+
+    def Qz(self, phi):
+        """Orthogonal rotation matrix about z-axis by angle phi
+        """
+        return(np.array([[ np.cos(phi), -np.sin(phi),            0],
+                         [ np.sin(phi),  np.cos(phi),            0],
+                         [           0,            0,            1]]))
+
 
     def get_speed(self, bin_num):
         """Returns the magnitude of velocity given a bin number
@@ -622,36 +650,77 @@ class PathfinderEnsemble(PathfinderDVL):
 
         Returns: (u,v,w) velocity vector in desired coordinate frame.
         """
-        BIAS_PITCH   =  8  # [deg]
-        BIAS_ROLL    = -1  # [deg]
-        BIAS_HEADING =  0  # [deg]
         u0,v0,w0     = velocity0
-        Velocity_e0  = np.array([[u0],[v0],[w0]])
-
-        # orthogonal transformation matrices 
-        def Qx(phi):
-            return(np.array([[           1,            0,            0],
-                             [           0,  np.cos(phi), -np.sin(phi)],
-                             [           0,  np.sin(phi),  np.cos(phi)]]))
-        def Qy(phi):
-            return(np.array([[ np.cos(phi),            0,  np.sin(phi)],
-                             [           0,            1,            0],
-                             [-np.sin(phi),            0,  np.cos(phi)]]))
-        def Qz(phi):
-            return(np.array([[ np.cos(phi), -np.sin(phi),            0],
-                             [ np.sin(phi),  np.cos(phi),            0],
-                             [           0,            0,            1]]))
+        V_earth0     = np.array([[u0],[v0],[w0]])
 
         # rotate from Earth Coords <E,N,U> to Ship Coords <S,F,U>
-        head = (self.heading-BIAS_HEADING)*self.DEG_TO_RAD
-        pitc = BIAS_PITCH*self.DEG_TO_RAD        
-        roll = BIAS_ROLL*self.DEG_TO_RAD
-        Velocity_s    = np.dot(Qz( head), Velocity_e0)
-        Velocity_s_p  = np.dot(Qx( pitc), Velocity_s)
-        Velocity_s_pr = np.dot(Qy( roll), Velocity_s_p)
-        Velocity_e    = np.dot(Qz(-head), Velocity_s_pr)
-        u,v,w         = Velocity_e.flatten()
+        heading           =  self.heading*self.DEG_TO_RAD
+        heading_bias      = (self.heading-self.BIAS_HEADING)*self.DEG_TO_RAD
+        pitch_bias        =  self.BIAS_PITCH*self.DEG_TO_RAD        
+        roll_bias         =  self.BIAS_ROLL*self.DEG_TO_RAD
+        V_ship            = np.dot(self.Qz( heading),      V_earth0)
+        V_ship_pitch      = np.dot(self.Qx( pitch_bias),   V_ship)
+        V_ship_pitch_roll = np.dot(self.Qy( roll_bias),    V_ship_pitch)
+        V_earth           = np.dot(self.Qz(-heading_bias), V_ship_pitch_roll)
+        u,v,w             = V_earth.flatten()
         return(u,v,w)
+
+
+    def get_bathy_factors(self):
+        """Computes three factors of bathymetry: depth, slope, & orientation"""
+        # convert bottom-track vertical range to slant range
+        sin_janus = np.sin(self.JANUS_ANGLE*self.DEG_TO_RAD)
+        cos_janus = np.cos(self.JANUS_ANGLE*self.DEG_TO_RAD)
+        slant_ranges = {
+            'r1' : self.get_data('btm_beam0_range') / cos_janus,
+            'r2' : self.get_data('btm_beam1_range') / cos_janus,
+            'r3' : self.get_data('btm_beam2_range') / cos_janus,
+            'r4' : self.get_data('btm_beam3_range') / cos_janus,
+        }
+
+        # ignore case when less than three ranges are available
+        min_valid_slant_ranges = 3 
+        valid_slant_ranges = {key:slant_ranges[key] for key in 
+            slant_ranges.keys() if not np.isnan(slant_ranges[key])}
+
+        if len(valid_slant_ranges) < min_valid_slant_ranges:
+            self.set_data('bathy_factor_depth',  np.nan)
+            self.set_data('bathy_factor_slope',  np.nan)
+            self.set_data('bathy_factor_orient', np.nan)
+            return()
+
+        # extract bottom contact positions in instrument coordinate frame
+        inst_coords = []
+        for key in valid_slant_ranges:
+            r = valid_slant_ranges[key]
+            z = r*cos_janus # z -> vertical component 
+            h = r*sin_janus # h -> horizontal component
+            if   key == 'r1': inst_coords.append(np.array([[-h], [ 0], [-z]]))
+            elif key == 'r2': inst_coords.append(np.array([[ h], [ 0], [-z]]))
+            elif key == 'r3': inst_coords.append(np.array([[ 0], [ h], [-z]]))
+            elif key == 'r4': inst_coords.append(np.array([[ 0], [-h], [-z]]))
+
+        # rotate instrument coordinates into the world frame using Euler angles
+        earth_coords = []
+        Qx = self.Qx((self.pitch   + self.BIAS_PITCH)   * self.DEG_TO_RAD)
+        Qy = self.Qy((self.roll    + self.BIAS_ROLL)    * self.DEG_TO_RAD)
+        Qz = self.Qz((self.heading + self.BIAS_HEADING) * self.DEG_TO_RAD)
+        for pos in inst_coords:
+            earth_coords.append(np.dot(Qz, np.dot(Qy, np.dot(Qx, pos))))
+
+        # use least squares approach to find planar surface of best fit
+        A = np.array([np.append(x[0:2].T, [1]) for x in earth_coords])
+        b = np.array([x[2] for x in earth_coords])
+        fit, residual, rnk, s = scipy.linalg.lstsq(A,b)
+
+        # fit = [a, b, c] s.t. z = ax + by + c
+        a,b,c  = tuple(fit)
+        bathy_depth  = self.depth - c
+        bathy_slope  = np.arctan((a**2 + b**2)**0.5)*self.RAD_TO_DEG
+        bathy_orient = np.arctan2(-a, -b)*self.RAD_TO_DEG
+        self.set_data('bathy_factor_depth',  bathy_depth)
+        self.set_data('bathy_factor_slope',  bathy_slope)
+        self.set_data('bathy_factor_orient', bathy_orient)
 
 
     def parse_beams(self, pd0_bytes, offset, num_bins, num_beams, var_format, 

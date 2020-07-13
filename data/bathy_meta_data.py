@@ -5,16 +5,37 @@ BathyData = {
     # Kolumbo Data Subset
     ##################################################
     'Kolumbo' : {
-        # 'file'  : "/Users/zduguid/Dropbox (MIT)/MIT-WHOI/Kolumbo cruise 2019/Grids/kolumbo bathymetry.tif",
-        'file'  : "/Users/zduguid/Dropbox (MIT)/MIT-WHOI/Kolumbo cruise 2019/zduguid/bathy/Kolumbo-10m.tif",
-        'AR'    : True,
-        'crop'  : [700, 1450, 700, 1300],
+        # 'filepath'  : "/Users/zduguid/Dropbox (MIT)/MIT-WHOI/Kolumbo cruise 2019/Grids/kolumbo bathymetry.tif",
+        'filepath'  : "/Users/zduguid/Dropbox (MIT)/MIT-WHOI/Kolumbo cruise 2019/zduguid/bathy/Kolumbo-10m.tif",
+        'latlon_format' : True,
+        'crop'  : [700, 1501, 700, 1300],
+        # 'crop'  : [0, 2000, 0, 2000],
             # crop  = [top, bot, left, right]
             # bathy = bathy_im[top:bot, left:right]
-        'title' : 'Kolumbo Volcano, Greece',
+        'name' : 'Kolumbo Volcano, Greece',
         'xlabel': 'Longitude [deg]',
         'ylabel': 'Latitude [deg]',
-        'ticks' : '%.3f',
+        'tick_format' : '%.2f',
+        'num_ticks' : 3,
+        'slope_max' : 50,
+        'depth_max' : None,
+        'depth_filter' : None,
+    },
+
+
+    ##################################################
+    # Kolumbo Data Full
+    ##################################################
+    'Kolumbo_full' : {
+        'filepath'  : "/Users/zduguid/Dropbox (MIT)/MIT-WHOI/Kolumbo cruise 2019/zduguid/bathy/Kolumbo-10m.tif",
+        'latlon_format' : False,
+        'crop'  : None,
+            # crop  = [top, bot, left, right]
+            # bathy = bathy_im[top:bot, left:right]
+        'name' : 'Kolumbo Volcano, Greece',
+        'xlabel': 'Longitude [deg]',
+        'ylabel': 'Latitude [deg]',
+        'tick_format' : '%.3f',
         'num_ticks' : 3,
         'slope_max' : None,
         'depth_max' : None,
@@ -25,16 +46,16 @@ BathyData = {
     ##################################################
     # Kolumbo Data Full
     ##################################################
-    'Kolumbo_full' : {
-        'file'  : "/Users/zduguid/Dropbox (MIT)/MIT-WHOI/Kolumbo cruise 2019/zduguid/bathy/Kolumbo-10m.tif",
-        'AR'    : True,
+    'Kolumbo_full_AR' : {
+        'filepath'  : "/Users/zduguid/Dropbox (MIT)/MIT-WHOI/Kolumbo cruise 2019/zduguid/bathy/Kolumbo-10m.tif",
+        'latlon_format'    : True,
         'crop'  : None,
             # crop  = [top, bot, left, right]
             # bathy = bathy_im[top:bot, left:right]
-        'title' : 'Kolumbo Volcano, Greece',
+        'name' : 'Kolumbo Volcano, Greece',
         'xlabel': 'Longitude [deg]',
         'ylabel': 'Latitude [deg]',
-        'ticks' : '%.3f',
+        'tick_format' : '%.3f',
         'num_ticks' : 3,
         'slope_max' : None,
         'depth_max' : None,
@@ -46,15 +67,15 @@ BathyData = {
     # Santorini Data Full
     ##################################################
     'Santorini_full' : {
-        'file'  : "/Users/zduguid/Dropbox (MIT)/MIT-WHOI/Kolumbo cruise 2019/zduguid/bathy/Christiana-Santorini-Kolumbo.tif",
-        'AR'    : True,
+        'filepath'  : "/Users/zduguid/Dropbox (MIT)/MIT-WHOI/Kolumbo cruise 2019/zduguid/bathy/Christiana-Santorini-Kolumbo.tif",
+        'latlon_format'    : True,
         'crop'  : None,
             # crop  = [top, bot, left, right]
             # bathy = bathy_im[top:bot, left:right]
-        'title' : 'Kolumbo Volcano, Greece',
+        'name' : 'Kolumbo Volcano, Greece',
         'xlabel': 'Longitude [deg]',
         'ylabel': 'Latitude [deg]',
-        'ticks' : '%.3f',
+        'tick_format' : '%.3f',
         'num_ticks' : 3,
         'slope_max' : None,
         'depth_max' : None,
@@ -66,15 +87,15 @@ BathyData = {
     # Buzzards Bay Data
     ##################################################
     'BuzzardsBay' : {
-        'file'  : "/Users/zduguid/Dropbox (MIT)/MIT-WHOI/NSF Arctic NNA/Environment-Data/BuzzardsBay-10m/BuzzBay_10m.tif",
-        'AR'    : False,
+        'filepath'  : "/Users/zduguid/Dropbox (MIT)/MIT-WHOI/NSF Arctic NNA/Environment-Data/BuzzardsBay-10m/BuzzBay_10m.tif",
+        'latlon_format'    : False,
         'crop'  : [1500, 5740, 1500, 6200],
             # crop  = [top, bot, left, right]
             # bathy = bathy_im[top:bot, left:right]
-        'title' : 'Buzzards Bay, MA',
+        'name' : 'Buzzards Bay, MA',
         'xlabel': 'UTM Zone 19',
         'ylabel': '',
-        'ticks' : '%.2g',
+        'tick_format' : '%.2g',
         'slope_max' : 8,
         'depth_max' : 35,
         'depth_filter' : None,
@@ -91,15 +112,15 @@ BathyData = {
     # Costa Rica Data Area1
     ##################################################
     'CostaRica_area1' : {
-        'file'  : "/Users/zduguid/Dropbox (MIT)/MIT-WHOI/18-Falkor Costa Rica/Bathy for Sentinel survey/Bathy_for_last_Sentinel_missions.tif",
-        'AR'    : False,
+        'filepath'  : "/Users/zduguid/Dropbox (MIT)/MIT-WHOI/18-Falkor Costa Rica/Bathy for Sentinel survey/Bathy_for_last_Sentinel_missions.tif",
+        'latlon_format'    : False,
         'crop'  : None,
             # crop  = [top, bot, left, right]
             # bathy = bathy_im[top:bot, left:right]
-        'title' : 'Continental Margin, Costa Rica',
+        'name' : 'Continental Margin, Costa Rica',
         'xlabel': 'UTM Zone 16',
         'ylabel': '',
-        'ticks' : '%.4g',
+        'tick_format' : '%.4g',
         'slope_max' : None,
         'depth_max' : None,
         'depth_filter' : None,
@@ -114,15 +135,15 @@ BathyData = {
     # Costa Rica Data Area3 
     ##################################################
     'CostaRica_area3' : {
-        'file'  : "/Users/zduguid/Documents/MIT-WHOI/MERS/Cook/cook/bathymetry/jaco-scar-depths.tif",
-        'AR'    : False,
+        'filepath'  : "/Users/zduguid/Documents/MIT-WHOI/MERS/Cook/cook/bathymetry/jaco-scar-depths.tif",
+        'latlon_format'    : False,
         'crop'  : [75, 550, 600, 1200],
             # crop  = [top, bot, left, right]
             # bathy = bathy_im[top:bot, left:right]
-        'title' : 'Jaco Scar, Costa Rica',
+        'name' : 'Jaco Scar, Costa Rica',
         'xlabel': 'UTM Zone 16',
         'ylabel': '',
-        'ticks' : '%.4g',
+        'tick_format' : '%.4g',
         'slope_max' : None,
         'depth_max' : None,
         'depth_filter' : 1000,
@@ -137,16 +158,16 @@ BathyData = {
     # Costa Rica Data Full
     ##################################################
     'CostaRica_full' : {
-        # 'file'  : "/Users/zduguid/Documents/MIT-WHOI/MERS/Cook/cook/bathymetry/jaco-scar-depths.tif",
-        'file'  : "/Users/zduguid/Dropbox (MIT)/MIT-WHOI/18-Falkor Costa Rica/zduguid/three-factor-bathymetry/CostaRica Falkor.tif",
-        'AR'    : False,
+        # 'filepath'  : "/Users/zduguid/Documents/MIT-WHOI/MERS/Cook/cook/bathymetry/jaco-scar-depths.tif",
+        'filepath'  : "/Users/zduguid/Dropbox (MIT)/MIT-WHOI/18-Falkor Costa Rica/zduguid/three-factor-bathymetry/CostaRica Falkor.tif",
+        'latlon_format'    : False,
         'crop'  : False,
             # crop  = [top, bot, left, right]
             # bathy = bathy_im[top:bot, left:right]
-        'title' : 'Falkor Dec 2018 Cruise, Costa Rica',
+        'name' : 'Falkor Dec 2018 Cruise, Costa Rica',
         'xlabel': 'UTM Zone 16',
         'ylabel': '',
-        'ticks' : '%.4g',
+        'tick_format' : '%.4g',
         'slope_max' : False,
         'depth_max' : False,
         'depth_filter' : None,
@@ -162,15 +183,15 @@ BathyData = {
     # Hawaii Data Small
     ##################################################
     'Hawaii_small' : {
-        'file'  : "/Users/zduguid/Documents/MIT-WHOI/MERS/Cook/cook/bathymetry/HI-small.tif",
-        'AR'    : True,
+        'filepath'  : "/Users/zduguid/Documents/MIT-WHOI/MERS/Cook/cook/bathymetry/HI-small.tif",
+        'latlon_format'    : True,
         'crop'  : None,
             # crop  = [top, bot, left, right]
             # bathy = bathy_im[top:bot, left:right]
-        'title' : "'Au'au Channel, Hawaii",
+        'name' : "'Au'au Channel, Hawaii",
         'xlabel': 'Lon [deg]',
         'ylabel': 'Lat [deg]',
-        'ticks' : '%.4g',
+        'tick_format' : '%.4g',
         'slope_max' : None,
         'depth_max' : None,
         'depth_filter' : None,
@@ -186,15 +207,15 @@ BathyData = {
     # Hawaii Data Small
     ##################################################
     'Hawaii_all' : {
-        'file'  : "/Users/zduguid/Documents/MIT-WHOI/MERS/Cook/cook/bathymetry/HI-all.tif",
-        'AR'    : True,
+        'filepath'  : "/Users/zduguid/Documents/MIT-WHOI/MERS/Cook/cook/bathymetry/HI-all.tif",
+        'latlon_format'    : True,
         'crop'  : None,
             # crop  = [top, bot, left, right]
             # bathy = bathy_im[top:bot, left:right]
-        'title' : "'Au'au Channel, Hawaii",
+        'name' : "'Au'au Channel, Hawaii",
         'xlabel': 'Lon [deg]',
         'ylabel': 'Lat [deg]',
-        'ticks' : '%.4g',
+        'tick_format' : '%.4g',
         'slope_max' : None,
         'depth_max' : None,
         'depth_filter' : None,        
@@ -207,18 +228,39 @@ BathyData = {
 
 
     ##################################################
-    # Template Data 
+    # Arctic 400m 
     ##################################################
-    'template' : {
-        'file'  : "path/to/file.tif",
-        'AR'    : False,
+    'Arctic' : {
+        'filepath'  : "/Users/zduguid/Dropbox (MIT)/MIT-WHOI/NSF Arctic NNA/Environment-Data/Arctic-400m/IBCAO_v4_400m.tif",
+        'latlon_format'    : False,
         'crop'  : None,
             # crop  = [top, bot, left, right]
             # bathy = bathy_im[top:bot, left:right]
-        'title' : 'TODO',
+        'name' : 'TODO',
         'xlabel': 'TODO',
         'ylabel': 'TODO',
-        'ticks' : '%.2g',
+        'tick_format' : '%.2g',
+        'slope_max' : None,
+        'depth_max' : None,
+        'depth_filter' : None,
+        'num_ticks' : 3,
+        'meta'  : None,
+    },
+
+
+    ##################################################
+    # Template Data 
+    ##################################################
+    'template' : {
+        'filepath'  : "path/to/file.tif",
+        'latlon_format'    : False,
+        'crop'  : None,
+            # crop  = [top, bot, left, right]
+            # bathy = bathy_im[top:bot, left:right]
+        'name' : 'TODO',
+        'xlabel': 'TODO',
+        'ylabel': 'TODO',
+        'tick_format' : '%.2g',
         'slope_max' : None,
         'depth_max' : None,
         'depth_filter' : None,

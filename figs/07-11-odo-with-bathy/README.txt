@@ -1,0 +1,1 @@
+The same bias settings used in Frontiers paper are used to generate these plots. This includes pitch_bias = 8deg, roll_bias=-1deg, and heading_bias=0. These bias parameters have been later tuned to improve TAN navigation performance.
