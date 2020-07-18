@@ -293,6 +293,7 @@ class BathymetryMap(object):
         add_xlabel=True, add_ylabel=True):
         """TODO
         """
+        sns.set(font_scale = 1.5)
         ep.plot_bands(
             bathy_array, 
             cmap=bathy_cmap,
@@ -375,6 +376,7 @@ class BathymetryMap(object):
     def plot_three_factors(self):
         """TODO
         """
+        sns.set(font_scale = 1.5)
         fig, ax = plt.subplots(2,3, figsize=(15,8), 
             gridspec_kw={'height_ratios': [2, 1]})
         fig.subplots_adjust(hspace=.4)

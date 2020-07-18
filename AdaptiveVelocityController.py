@@ -61,8 +61,58 @@ class AVC(object):
 
 
     @classmethod
-    def get_optimal_depth_band(cls):
-        pass
+    def get_optimal_depth_band(cls, voc_u_list, voc_v_list, max_depth, heading,
+        pitch, p_hotel, voc_interval_len=1, percent_ballast=0.2, verbose=True):
+        """Determine the optimal depth band for the AUG.
+
+        Args: 
+            voc_u_list: list of eastward ocean currents 
+            voc_v_list: list of northward ocean currents 
+            max_depth: maximum depth allowed in this region 
+            heading: AUG heading [deg]
+            pitch: AUG pitch [deg]
+            p_hotel: AUG hotel load [W]
+            voc_interval_len: distance between ocean current bins [m]
+            percent_ballast: [%]
+
+        Returns: 
+            tuple (optimal dive-to depth, optimal climb-to depth, optimal 
+                transport cost, dive list, climb list, transport cost list)
+        """
+        # initialize list to keep track of objective for all depth-bands
+        dive_list  = []
+        climb_list = []
+        TC_list    = []
+        AVC_depth_band = AVC()
+        if verbose: print("> EDBS for Heading: %d" % (heading))
+
+        # iterate through the valid combinations of dive-to and climb-to depths
+        for z_dive in range(max_depth):
+            if verbose: 
+                if z_dive % 10 == 0: print("   dive depth: %d"%z_dive)
+            for z_climb in range(z_dive):
+
+                # update lists
+                climb_list.append(z_climb)
+                dive_list.append(z_dive)
+                TC_list.append(AVC_depth_band.get_depth_band_transport_cost(
+                    z_dive, 
+                    z_climb, 
+                    voc_u_list,
+                    voc_v_list,
+                    p_hotel, 
+                    heading, 
+                    pitch,
+                    voc_interval_len=voc_interval_len,
+                    percent_ballast=percent_ballast)
+                )
+
+        # extract the optimal depth band 
+        idx_min     = np.argmin(TC_list)
+        opt_z_dive  = dive_list[idx_min]
+        opt_z_climb = climb_list[idx_min]
+        opt_TC      = TC_list[idx_min]
+        return(opt_z_dive, opt_z_climb, opt_TC, dive_list, climb_list, TC_list)
 
 
     def get_transport_cost_vtw_prop(self, vtw_prop, voc_mag, voc_delta, 
@@ -106,8 +156,9 @@ class AVC(object):
         return(p_total/vog)
 
 
-    def get_depth_band_transport_cost(self, z_dive, z_climb, p_hotel, heading, 
-        pitch, voc_u_list, voc_v_list, voc_interval_len, percent_ballast):
+    def get_depth_band_transport_cost(self, z_dive, z_climb, voc_u_list, 
+        voc_v_list, p_hotel, heading, pitch, voc_interval_len=1, 
+        percent_ballast=0.2):
         """Determine the transport cost of the depth band given vehicle and 
         environment state variables.
 
@@ -115,7 +166,7 @@ class AVC(object):
             z_dive: dive depth [m]
             z_climb: climb depth [m]
             p_hotel: hotel load [W]
-            heading: glider heading in [rad]
+            heading: glider heading in [deg]
             pitch: glider pitch in [deg]
             voc_u_list: list of eastward ocean current velocities [m/s]
             voc_v_list: list of northward ocean current velocities [m/s]
@@ -137,7 +188,7 @@ class AVC(object):
             # determine heading offset and components of ocean currents
             voc_heading  = np.arctan2(voc_u, voc_v)
             voc_mag      = np.linalg.norm([voc_u, voc_v])
-            voc_delta    = voc_heading - heading
+            voc_delta    = voc_heading - heading*self.DEG_TO_RAD
             voc_para     = voc_mag*np.cos(voc_delta)
             voc_perp     = voc_mag*np.sin(voc_delta)
 
@@ -161,7 +212,7 @@ class AVC(object):
             # computer power draw with optimal propulsive power
             #   + note that ballast pump cost already to energy consumption
             p_prop    = self.get_prop_power(vtw_prop)
-            p_total   = p_prop + hotel
+            p_total   = p_prop + p_hotel
 
             # add energy consumption and distance traveled to the summation 
             delta_time      = voc_interval_len/vtw_ver  # [s]
@@ -169,8 +220,7 @@ class AVC(object):
             delta_distance += vog*delta_time            # [m]
             
         # handle case when vehicle cannot travel with this depth band
-        if delta_distance == 0:
-            return(np.nan)
+        if delta_distance == 0: return(np.nan)
         # otherwise return the transport cost for this depth band 
         return(delta_energy/delta_distance)
 
@@ -211,4 +261,28 @@ class AVC(object):
         # adjust speed for percent of ballast used
         vtw_adjusted = vtw_foreward*(percent_ballast**0.5)
         return(vtw_adjusted)
+
+
+    @classmethod
+    def get_rescaled_voc_lists(cls, original_depth, new_depth, voc_u_list, voc_v_list):
+        """Rescales ocean currents from original depth to new depth 
+
+        This function can be used to study a particular water column current 
+        profile at different depth scaling. For example, changing the depth 
+        of the profile can be used as a diagnostic tool for EDBS algorithm.
+        """
+        new_voc_u = [voc_u_list[int((original_depth/new_depth)*i)] 
+                        for i in range(new_depth)]
+        new_voc_v = [voc_v_list[int((original_depth/new_depth)*i)] 
+                        for i in range(new_depth)]
+        new_voc_z = np.linspace(0,new_depth,new_depth)
+
+        # fill NaN values 
+        for i in range(len(new_voc_u)):
+            if np.isnan(new_voc_u[i]):
+                new_voc_u[i] = new_voc_u[i-1]
+                new_voc_v[i] = new_voc_v[i-1]
+
+        return(new_voc_u, new_voc_v, new_voc_z)
+
 

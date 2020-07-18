@@ -12,10 +12,7 @@ Changes Before Commit:
 
 Future TODOs
 - add ReadMe documentation on the PathfinderUtils classes
-- add UTM conversion function to pathfinder class? or keep in notebook?
-- implement SlocumScienceController
-- add a "glider" file that has bias parameter information 
-- add more constructor methods ("from_csv", "from_frames", "from_directory")
+- implement SlocumScienceController 
 ------------------------------------------------>
 
 
@@ -274,24 +271,25 @@ The following data fields are extracted from the flight computer of the Slocum G
 
 The following data files were collected from the Sentinel glider during the Kolumbo experiments in November 2019.
 
-|Mission # |PD0 File |Start |End |Duration  |# of Dives  |Max Depth |
-| ---     | ---     | ---                | ---                | ---  |---|--- |
-|Dive 1   |sk211610 |2019-11-21 16:10:24 |2019-11-21 16:28:54 |0.308 |2  |9   |
-|Dive 2   |sk211652 |2019-11-21 16:52:53 |2019-11-21 20:35:37 |3.712 |13 |106 |
-|Dive 3   |01820002 |2019-11-21 21:17:11 |2019-11-21 23:53:33 |2.606 |11 |103 |
-|Dive 4   |sk220034 |2019-11-22 00:34:46 |2019-11-22 01:28:11 |0.890 |4  |95  |
-|Dive 5   |01820008 |2019-11-22 01:44:56 |2019-11-22 02:40:35 |0.927 |4  |75  |
-|Dive 6   |01820010 |2019-11-22 03:24:02 |2019-11-22 03:46:45 |0.379 |1  |65  |
-|Dive 7   |01820013 |2019-11-22 04:03:29 |2019-11-22 04:51:22 |0.798 |4  |66  |
-|Dive 8   |sk220500 |2019-11-22 05:00:31 |2019-11-22 06:07:27 |1.115 |5  |57  |
-|Dive 9   |sk222256 |2019-11-22 22:56:40 |2019-11-23 01:06:52 |2.170 |13 |52  |
-|Dive 10  |sk230107 |2019-11-23 01:07:16 |2019-11-23 01:44:41 |0.623 |2  |52  |
-|Dive 11\*|sk230148 |2019-11-23 01:48:05 |2019-11-23 02:43:28 |0.923 |1  |387 |
-|Dive 12  |sk230350 |2019-11-23 03:50:37 |2019-11-23 06:41:37 |2.850 |15 |53  |
-|Dive 13\*|sk261107 |2019-11-26 11:07:19 |2019-11-26 11:55:24 |0.801 |1  |275 |
-|Dive 14  |sk261222 |2019-11-26 12:22:16 |2019-11-26 15:24:27 |3.036 |5  |415 |
+|Frontiers Name|Dive #|PD0 Name|Start|End|Duration|# of Dives|Max Depth|
+| ---   | ---      | ---     | ---        | ---        |--- |---|--- |
+|       |Dive 1    |sk211610 |11-21 16:10 |11-21 16:28 |0.3 |2  |9   |
+|Dive C |Dive 2    |sk211652 |11-21 16:52 |11-21 20:35 |3.7 |13 |106 |
+|Dive D |Dive 3    |01820002 |11-21 21:17 |11-21 23:53 |2.6 |11 |103 |
+|Dive E |Dive 4    |sk220034 |11-22 00:34 |11-22 01:28 |0.9 |4  |95  |
+|Dive F |Dive 5    |01820008 |11-22 01:44 |11-22 02:40 |0.9 |4  |75  |
+|       |Dive 6    |01820010 |11-22 03:24 |11-22 03:46 |0.4 |1  |65  |
+|Dive G |Dive 7    |01820013 |11-22 04:03 |11-22 04:51 |0.8 |4  |66  |
+|       |Dive 8\*\*|sk220500 |11-22 05:00 |11-22 06:07 |1.1 |5  |57  |
+|Dive H |Dive 9    |sk222256 |11-22 22:56 |11-23 01:06 |2.2 |13 |52  |
+|       |Dive 10   |sk230107 |11-23 01:07 |11-23 01:44 |0.6 |2  |52  |
+|       |Dive 11\* |sk230148 |11-23 01:48 |11-23 02:43 |0.9 |1  |387 |
+|Dive B |Dive 12   |sk230350 |11-23 03:50 |11-23 06:41 |2.9 |15 |53  |
+|       |Dive 13\* |sk261107 |11-26 11:07 |11-26 11:55 |0.8 |1  |275 |
+|Dive A |Dive 14   |sk261222 |11-26 12:22 |11-26 15:24 |3.0 |5  |415 |
 
-\*These dives seems to crash into the seafloor. The DVL file does not include a return to surface.
+\* The AUG seems to crash into the seafloor and the DVL stops recording while the AUG is at depth.
+\*\* The AUG appears stuck on the seafloor for about 30 minute before freeing itself and ascending to the surface.
 
 
 

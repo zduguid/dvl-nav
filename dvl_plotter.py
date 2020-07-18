@@ -416,7 +416,7 @@ def plot_profile_and_odometry_and_dr(ts_pd0, ts_dbd_all, save_name=None):
 
 
 ###############################################################################
-# PLOT PROFILE AND ODOMETRY AND DEAD-RECKONED
+# PLOT PROFILE AND ODOMETRY AND DEAD-RECKONED AND THREE-FACTORS
 ###############################################################################
 def plot_profile_and_odometry_and_dr_and_three_factors(ts_pd0, ts_dbd_all,
     bathy_df, save_name=None):
@@ -569,6 +569,7 @@ def plot_profile_and_odometry_and_dr_and_three_factors(ts_pd0, ts_dbd_all,
             bathy_df.utm_y_list - dbd_utm_y,
             nav_hues[i],
             marker='s',
+            # s=100,
             palette=nav_palletes[i],
             linewidth=0,
             ax=nav_axs[i],
@@ -589,7 +590,155 @@ def plot_profile_and_odometry_and_dr_and_three_factors(ts_pd0, ts_dbd_all,
         nav_axs[i].set_xlabel('')
     ax3.set_title('Navigation in LMC')
     ax5.set_xlabel('X Position [m]')
-    plt.suptitle('Multi-Factor Terrain Based Navigation', fontweight='bold')
+    plt.suptitle('Multi-Factor Terrain-Aided Navigation', fontweight='bold')
+    plt.subplots_adjust(wspace=0.3)
+    if save_name: plt.savefig('/Users/zduguid/Desktop/fig/%s' % save_name)
+    else:         plt.savefig('/Users/zduguid/Desktop/fig/tmp.png')
+    plt.close()
+
+
+
+###############################################################################
+# PLOT PROFILE AND ODOMETRY AND DEAD-RECKONED AND SLOPE FACTOR
+###############################################################################
+def plot_profile_and_odometry_and_dr_and_slope_factor(ts_pd0, ts_dbd_all,
+    bathy_df, save_name=None):
+    sns.set(font_scale = 1.5)
+    fig, ax = plt.subplots(1,2, figsize=(15,8))
+
+    #############################################
+    # HELPER ####################################
+    #############################################
+    def get_utm_coords_from_glider_lat_lon(m_lat, m_lon):
+        SECS_IN_MIN = 60
+        MIN_OFFSET = 100
+        lat_min  = m_lat % MIN_OFFSET 
+        lon_min  = m_lon % MIN_OFFSET 
+        lat_dec  = (m_lat - lat_min)/MIN_OFFSET + lat_min/SECS_IN_MIN
+        lon_dec  = (m_lon - lon_min)/MIN_OFFSET + lon_min/SECS_IN_MIN
+        utm_pos  = utm.from_latlon(lat_dec, lon_dec)
+        easting  = round(utm_pos[0],2)
+        northing = round(utm_pos[1],2)
+        zone     = utm_pos[2]
+        return(easting, northing, zone)
+
+    #############################################
+    # PLOT PROFILE ##############################
+    #############################################
+    depth = -1 * ts_pd0.df['depth']
+    line_plot = depth.plot(figsize=(15,8), linewidth=3, color='tab:orange', ax=ax[0])
+
+    # compute altitude estimate from the four vertical range estimates
+    # - does not account for pitch and roll of the vehicle 
+    h1 = ts_pd0.df['btm_beam0_range']
+    h2 = ts_pd0.df['btm_beam1_range']
+    h3 = ts_pd0.df['btm_beam2_range']
+    h4 = ts_pd0.df['btm_beam3_range']
+    altitude = depth - ((h1*h2)/(h1 + h2) + (h3*h4)/(h3 + h4))
+    altitude.plot(linewidth=3, color='tab:blue', zorder=1, ax=ax[0])
+
+    # bottom_track slant range data 
+    bt_ranges = [
+        'btm_beam0_range',
+        'btm_beam1_range',
+        'btm_beam2_range',
+        'btm_beam3_range'
+    ]
+    bt_colors = ['powderblue','darkturquoise','lightsteelblue','deepskyblue']
+    for i in range(len(bt_ranges)):
+        bt_range  = depth - ts_pd0.df[bt_ranges[i]]
+        bt_range.plot(linewidth=1, color=bt_colors[i], zorder=0, ax=ax[0])
+    ax[0].set_ylabel('Depth [m]')
+    ax[0].set_xlabel('Time')
+    ax[0].set_title('Dive Profile')
+    ax[0].legend(['Depth [m]', 'Altitude [m]'], loc='best',
+        frameon=True, framealpha=0.6, fontsize='small')
+
+    #############################################
+    # PLOT ODOMETRY AND DEAD-RECKONED ###########
+    #############################################
+    # sub-select a portion of glider flight computer variables
+    start_t = datetime.datetime.fromtimestamp(ts_pd0.df.time[0])
+    end_t   = datetime.datetime.fromtimestamp(ts_pd0.df.time[-1])
+    dur     = end_t - start_t 
+    df_dbd  = ts_dbd_all.df[str(start_t):str(end_t)].copy()
+
+    # extract start_t position "origin" from the glider flight data 
+    for t in range(len(df_dbd)):
+        if not np.isnan(df_dbd.m_x_lmc[t]):
+            dbd_origin_x_lmc = df_dbd.m_x_lmc[t]
+            dbd_origin_y_lmc = df_dbd.m_y_lmc[t]
+            dbd_origin_m_lat = df_dbd.m_lat[t]
+            dbd_origin_m_lon = df_dbd.m_lon[t]
+            break
+    dbd_utm_x, dbd_utm_y, _ = get_utm_coords_from_glider_lat_lon(
+        dbd_origin_m_lat, 
+        dbd_origin_m_lon
+    )
+
+    sns.scatterplot(
+        ts_pd0.df.rel_pos_x,
+        ts_pd0.df.rel_pos_y,
+        color='tab:orange',
+        label='DVL Odometry',
+        linewidth=0,
+        s=8,
+        data=ts_pd0.df,
+        ax=ax[1],
+        zorder=2,
+    )
+    sns.scatterplot(
+        x=df_dbd.m_x_lmc - dbd_origin_x_lmc,
+        y=df_dbd.m_y_lmc - dbd_origin_y_lmc,
+        color='tab:blue',
+        label='Dead-Reckoned',
+        linewidth=0,
+        s=8,
+        data=df_dbd,
+        ax=ax[1],
+        zorder=1,
+    )
+    sns.scatterplot(
+        x=df_dbd.m_gps_x_lmc - dbd_origin_x_lmc, 
+        y=df_dbd.m_gps_y_lmc - dbd_origin_y_lmc,
+        marker='X',
+        color='tab:red', 
+        label='GPS Fix',
+        s=200,
+        data=df_dbd,
+        ax=ax[1],
+        zorder=5,
+    )
+
+    plt.axis('equal')
+    x_lim = ax[1].get_xlim()
+    y_lim = ax[1].get_ylim()
+    sns.scatterplot(
+        bathy_df.utm_x_list - dbd_utm_x,
+        bathy_df.utm_y_list - dbd_utm_y,
+        bathy_df.slope_list,
+        marker='s',
+        palette='Purples',
+        linewidth=0,
+        ax=ax[1],
+        zorder=0,
+        legend=False,
+    )
+
+    ax[1].set_xlim(x_lim)
+    ax[1].set_ylim(y_lim)
+    lgnd = ax[1].legend(frameon=True, framealpha=0.6, loc='best', 
+        fontsize='small')
+    lgnd.legendHandles[0]._sizes = [60]
+    lgnd.legendHandles[1]._sizes = [60]
+    lgnd.legendHandles[2]._sizes = [200]
+    if len(lgnd.legendHandles) == 4:
+        lgnd.legendHandles[3]._sizes = [100]
+    dt = df_dbd.index[0].replace(microsecond=0)
+    plt.suptitle('DVL Odometry with Water Column Sensing', fontweight='bold')
+    plt.title('Odometry in LMC')
+    plt.xlabel('X position [m]')
+    plt.ylabel('Y position [m]')
     plt.subplots_adjust(wspace=0.3)
     if save_name: plt.savefig('/Users/zduguid/Desktop/fig/%s' % save_name)
     else:         plt.savefig('/Users/zduguid/Desktop/fig/tmp.png')
@@ -886,9 +1035,8 @@ def plot_exploitative_depth_bands(dive_list, climb_list, TC_list,
     c = plt.cm.twilight_shifted(c) 
     
     # generate quiver plot
-    heading_x   = np.sin(glider_heading)
-    heading_y   = np.cos(glider_heading)
-    heading_deg = np.round(glider_heading*180/np.pi)
+    heading_x   = np.sin(glider_heading*np.pi/180)
+    heading_y   = np.cos(glider_heading*np.pi/180)
     ax.quiver(x, y, -z, u, v, w, colors=c,length=1,normalize=False)
     ax.quiver(
         0, 0, -np.max(voc_z_list), 
@@ -913,17 +1061,17 @@ def plot_exploitative_depth_bands(dive_list, climb_list, TC_list,
     ax.elev =   30   # [deg]
     plt.xlim(-max_current,max_current)
     plt.ylim(-max_current,max_current)
-    plt.title(r"AUG Heading: %3d$^\circ$" % heading_deg, 
+    plt.title(r"AUG Heading: %3d$^\circ$" % glider_heading, 
         fontfamily='monospace')
     plt.suptitle('Exploitative Depth Band Selection', fontweight='bold')
-    if heading_deg >= 0 and heading_deg < 10:
+    if glider_heading >= 0 and glider_heading < 10:
         leading_zeros ='00'
-    elif heading_deg >= 10 and heading_deg < 100:
+    elif glider_heading >= 10 and glider_heading < 100:
         leading_zeros = '0'
     else:
         leading_zeros = ''
     plt.savefig('/Users/zduguid/Desktop/fig/depth-band-%s%d.png' % 
-        (leading_zeros, heading_deg))
+        (leading_zeros, glider_heading))
     plt.close()
 
 
