@@ -19,7 +19,7 @@ class AVC(object):
         # constants to define limits of propulsive thruster
         self.V_MIN  = 0.0
         self.V_MAX  = 1.5
-        self.V_RES  = 61
+        self.V_RES  = 61 
         self.V_LIST = np.linspace(self.V_MIN, self.V_MAX, self.V_RES)
 
         # minimum and maximum pitch values in [deg]
@@ -58,6 +58,26 @@ class AVC(object):
         min_idx = np.nanargmin(f_list)
         opt_v   = AVC.V_LIST[min_idx]
         return(opt_v)
+
+
+    @classmethod
+    def get_optimal_vog(cls, voc_mag=0, voc_delta=0, p_hotel=6.37, 
+        pitch=12, z_dive=500, z_climb=0, percent_ballast=1.00):
+        """Determine the over-ground velocity when AUG using optimal thrust
+        
+        Returns:
+            The energy-optimal over-ground velocity for the glider in [m/s]
+        """
+        # find the optimal through-water velocity of the AUG
+        vog_AVC  = AVC()
+        vtw_prop = AVC.get_optimal_vtw_prop(voc_mag, voc_delta, p_hotel, pitch,
+            z_dive, z_climb, percent_ballast)
+
+        # find the resulting over-ground speed of the AUG
+        vog = vog_AVC.get_vog(vtw_prop, voc_mag, voc_delta, p_hotel, pitch, 
+            z_dive, z_climb, percent_ballast)
+
+        return(vog)
 
 
     @classmethod
@@ -129,6 +149,25 @@ class AVC(object):
             z_climb: climb depth (positive downwards) [m]
             percent_ballast: percentage of ballast volume pumped [%]
         """
+        # get the resulting over-ground velocity for this propulsive power
+        vog = self.get_vog(vtw_prop, voc_mag, voc_delta, p_hotel, pitch, 
+            z_dive, z_climb, percent_ballast)
+
+        # compute the total through-water velocity 
+        vtw_buoy  = self.get_vtw_buoy(pitch, percent_ballast)
+        vtw_total = vtw_prop + vtw_buoy
+        
+        # compute energy expended from all sources of power draw
+        p_prop  = self.get_prop_power(vtw_prop)  
+        p_buoy  = self.get_buoy_power(vtw_total, pitch, z_dive, z_climb)
+        p_total = p_prop + p_buoy + p_hotel
+        return(p_total/vog)
+
+
+    def get_vog(self, vtw_prop, voc_mag, voc_delta, p_hotel, pitch, z_dive, 
+        z_climb, percent_ballast):
+        """Computes the over-ground velocity given all operating conditions
+        """
         # determine the long-track and cross-track ocean current components
         voc_para = voc_mag*np.cos(voc_delta)
         voc_perp = np.abs(voc_mag*np.sin(voc_delta))
@@ -149,11 +188,8 @@ class AVC(object):
         
         # glider can successfully move in intended direction
         #   + compute energy expended from all sources of power draw
-        vog     = vtw_para + voc_para
-        p_prop  = self.get_prop_power(vtw_prop)  
-        p_buoy  = self.get_buoy_power(vtw_total, pitch, z_dive, z_climb)
-        p_total = p_prop + p_buoy + p_hotel
-        return(p_total/vog)
+        vog = vtw_para + voc_para
+        return(vog)
 
 
     def get_depth_band_transport_cost(self, z_dive, z_climb, voc_u_list, 
