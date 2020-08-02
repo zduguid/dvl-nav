@@ -33,11 +33,18 @@ class PathfinderDVL(object):
         self.MAX_ENS_NUM   = 65536   # max number of ensembles before rollover
 
         # mounting bias parameters 
-        self.BIAS_PITCH   =  8.0  # [deg]
+        self.BIAS_PITCH   = 12.5  # [deg]
         self.BIAS_ROLL    =  0.0  # [deg]
         self.BIAS_HEADING =  0.0  # [deg]
+
+        # self.BIAS_PITCH   =  8.0  # [deg]
+        # self.BIAS_ROLL    =  0.0  # [deg]
+        # self.BIAS_HEADING =  0.0  # [deg]
+
+        # self.BIAS_PITCH   =  8.0  # [deg]
         # self.BIAS_ROLL    =  4.0  # [deg]
         # self.BIAS_HEADING = -3.0  # [deg]
+        
         self.JANUS_ANGLE  = 30    # [deg]
 
         # map from each variable group name to three letter abbreviation 

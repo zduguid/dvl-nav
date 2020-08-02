@@ -362,6 +362,7 @@ def plot_profile_and_odometry_and_dr(ts_pd0, ts_dbd_all, save_name=None):
             dbd_origin_x_lmc = df_dbd.m_x_lmc[t]
             dbd_origin_y_lmc = df_dbd.m_y_lmc[t]
             break
+
     sns.scatterplot(
         ts_pd0.df.rel_pos_x,
         ts_pd0.df.rel_pos_y,
@@ -450,17 +451,24 @@ def plot_profile_and_odometry_and_dr_and_three_factors(ts_pd0, ts_dbd_all,
     ax5=plt.subplot(3,2,6)
     roll_len = 20
     marker_size = 15
-    sns.scatterplot(ts_pd0.df.time, 
-        -ts_pd0.df.bathy_factor_depth.rolling(roll_len).median(), ax=ax0,
-        s=marker_size, linewidth=0, color='tab:blue', zorder=3)
+
+    # factor_d = -ts_pd0.df.bathy_factor_depth.rolling(roll_len).median()
+    # factor_s =  ts_pd0.df.bathy_factor_slope.rolling(roll_len).median()
+    # factor_o =  ts_pd0.df.bathy_factor_orient.rolling(roll_len).median()
+
+    # TODO double check that these features are added to the data-frame
+    factor_d = -ts_pd0.df.pc_bathy_depth
+    factor_s =  ts_pd0.df.pc_bathy_slope
+    factor_o =  ts_pd0.df.pc_bathy_orient 
+
+    sns.scatterplot(ts_pd0.df.time, factor_d, ax=ax0, s=marker_size, 
+        linewidth=0, color='tab:blue', zorder=3)
     sns.scatterplot(ts_pd0.df.time, -ts_pd0.df.depth, linewidth=0, ax=ax0,
-        s=marker_size, color='tab:orange', zorder=2)
-    sns.scatterplot(ts_pd0.df.time, 
-        ts_pd0.df.bathy_factor_slope.rolling(roll_len).median(),  ax=ax1,
-        s=marker_size, linewidth=0, color='tab:purple')
-    sns.scatterplot(ts_pd0.df.time, 
-        ts_pd0.df.bathy_factor_orient.rolling(roll_len).median(), ax=ax2,
-        s=marker_size,linewidth=0,color='tab:red')
+        s=int(marker_size/2), color='tab:orange', zorder=2)
+    sns.scatterplot(ts_pd0.df.time, factor_s,  ax=ax1, s=marker_size, 
+        linewidth=0, color='tab:purple')
+    sns.scatterplot(ts_pd0.df.time, factor_o, ax=ax2, s=marker_size,
+        linewidth=0, color='tab:red')
 
     ticks  = ax0.get_xticks()
     labels = [str(datetime.datetime.fromtimestamp(l)) for l in ticks]
@@ -513,17 +521,25 @@ def plot_profile_and_odometry_and_dr_and_three_factors(ts_pd0, ts_dbd_all,
             dbd_origin_m_lat = df_dbd.m_lat[t]
             dbd_origin_m_lon = df_dbd.m_lon[t]
             break
+
     dbd_utm_x, dbd_utm_y, _ = get_utm_coords_from_glider_lat_lon(
         dbd_origin_m_lat, 
         dbd_origin_m_lon
     )
 
+    # TODO temp plotting helper 
+    pitch_threshold = 30
+    tmp_slope = np.array(bathy_df.slope_list)
+    tmp_slope[tmp_slope >= pitch_threshold] = pitch_threshold
+
+    # TODO depth filter
     tmp_depth    = bathy_df.depth_list.copy()
     depth_filter = np.nanmax(ts_pd0.df.depth)*3
     tmp_depth[tmp_depth > depth_filter] = depth_filter
+
     nav_axs      = [ax3, ax4, ax5]
     nav_palletes = ['Blues', 'Purples', 'twilight_shifted']
-    nav_hues     = [tmp_depth, bathy_df.slope_list, bathy_df.orient_list] 
+    nav_hues     = [tmp_depth, tmp_slope, bathy_df.orient_list] 
     nav_xlims    = []
     nav_ylims    = []
 
@@ -543,7 +559,7 @@ def plot_profile_and_odometry_and_dr_and_three_factors(ts_pd0, ts_dbd_all,
         sns.scatterplot(
             x=df_dbd.m_x_lmc - dbd_origin_x_lmc,
             y=df_dbd.m_y_lmc - dbd_origin_y_lmc,
-            color='tab:gray',
+            color='hotpink',
             label='DR-DACC',
             linewidth=0,
             s=8,
@@ -590,7 +606,9 @@ def plot_profile_and_odometry_and_dr_and_three_factors(ts_pd0, ts_dbd_all,
         nav_axs[i].set_xlabel('')
     ax3.set_title('Navigation in LMC')
     ax5.set_xlabel('X Position [m]')
-    plt.suptitle('Multi-Factor Terrain-Aided Navigation', fontweight='bold')
+    # TODO
+    # plt.suptitle('Multi-Factor Terrain-Aided Navigation', fontweight='bold')
+    plt.suptitle('Bathymetric Factor Extraction for MF-TAN',fontweight='bold')
     plt.subplots_adjust(wspace=0.3)
     if save_name: plt.savefig('/Users/zduguid/Desktop/fig/%s' % save_name)
     else:         plt.savefig('/Users/zduguid/Desktop/fig/tmp.png')
@@ -710,13 +728,18 @@ def plot_profile_and_odometry_and_dr_and_slope_factor(ts_pd0, ts_dbd_all,
         zorder=5,
     )
 
+    # TODO temp plotting helper 
+    pitch_threshold = 30
+    tmp_slope_list = np.array(bathy_df.slope_list)
+    tmp_slope_list[tmp_slope_list >= pitch_threshold] = pitch_threshold
+
     plt.axis('equal')
     x_lim = ax[1].get_xlim()
     y_lim = ax[1].get_ylim()
     sns.scatterplot(
         bathy_df.utm_x_list - dbd_utm_x,
         bathy_df.utm_y_list - dbd_utm_y,
-        bathy_df.slope_list,
+        tmp_slope_list,
         marker='s',
         palette='Purples',
         linewidth=0,
