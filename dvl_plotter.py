@@ -416,6 +416,127 @@ def plot_profile_and_odometry_and_dr(ts_pd0, ts_dbd_all, save_name=None):
     else:         plt.savefig('/Users/zduguid/Desktop/fig/tmp.png')
 
 
+
+###############################################################################
+# PLOT PROFILE AND ODOMETRY AND DEAD-RECKONED
+###############################################################################
+def plot_profile_and_navigation(ts_pd0, ts_dbd_all, save_name=None):
+    sns.set(font_scale = 1.5)
+    fig, ax = plt.subplots(1,2, figsize=(15,8))
+
+    #############################################
+    # PLOT PROFILE ##############################
+    #############################################
+    linewidth=8
+    sns.scatterplot(
+        ts_pd0.df.time, 
+        -ts_pd0.df.depth, 
+        ax=ax[0], 
+        linewidth=0,  
+        s=linewidth,
+        label='AUG Depth',
+        color='tab:orange',
+    )
+    sns.scatterplot(
+        ts_pd0.df.time, 
+        -ts_pd0.df.pc_bathy_depth,           
+        ax=ax[0], 
+        linewidth=0,
+        s=linewidth,  
+        label='Seafloor Depth',
+        color='tab:blue',
+    )
+
+
+    #############################################
+    # PLOT ODOMETRY AND DEAD-RECKONED ###########
+    #############################################
+    # sub-select a portion of glider flight computer variables
+    start_t = datetime.datetime.fromtimestamp(ts_pd0.df.time[0])
+    end_t   = datetime.datetime.fromtimestamp(ts_pd0.df.time[-1])
+    dur     = end_t - start_t 
+    df_dbd  = ts_dbd_all.df[str(start_t):str(end_t)].copy()
+
+    # extract start_t position "origin" from the glider flight data 
+    for t in range(len(df_dbd)):
+        if not np.isnan(df_dbd.m_x_lmc[t]):
+            dbd_origin_x_lmc = df_dbd.m_x_lmc[t]
+            dbd_origin_y_lmc = df_dbd.m_y_lmc[t]
+            break
+    sns.scatterplot(
+        ts_pd0.df.tan_pos_x,
+        ts_pd0.df.tan_pos_y,
+        color='tab:orange',
+        label='Multi-Factor TAN',
+        linewidth=0,
+        s=linewidth,
+        data=ts_pd0.df,
+        ax=ax[1],
+        zorder=2,
+    )
+    sns.scatterplot(
+        ts_pd0.df.rel_pos_x,
+        ts_pd0.df.rel_pos_y,
+        color='limegreen',
+        label='DVL Odometry',
+        linewidth=0,
+        s=linewidth,
+        data=ts_pd0.df,
+        ax=ax[1],
+        zorder=2,
+    )
+    sns.scatterplot(
+        x=df_dbd.m_x_lmc - dbd_origin_x_lmc,
+        y=df_dbd.m_y_lmc - dbd_origin_y_lmc,
+        color='mediumorchid',
+        label='Dead Reckoned',
+        linewidth=0,
+        s=linewidth,
+        data=df_dbd,
+        ax=ax[1],
+        zorder=1,
+    )
+    sns.scatterplot(
+        x=df_dbd.m_gps_x_lmc - dbd_origin_x_lmc, 
+        y=df_dbd.m_gps_y_lmc - dbd_origin_y_lmc,
+        marker='X',
+        color='tab:red', 
+        label='GPS Fix',
+        s=100,
+        data=df_dbd,
+        ax=ax[1],
+        zorder=5,
+    )
+
+    # TODO -- can add marker for when TAN is able to recognize a feature
+    lgnd = ax[0].legend(frameon=True, framealpha=0.6, loc='best', 
+        fontsize='small')
+    lgnd.legendHandles[0]._sizes = [100]
+    lgnd.legendHandles[1]._sizes = [100]
+    lgnd = ax[1].legend(frameon=True, framealpha=0.6, loc='best', 
+        fontsize='small')
+    lgnd.legendHandles[0]._sizes = [100]
+    lgnd.legendHandles[1]._sizes = [100]
+    lgnd.legendHandles[2]._sizes = [100]
+    lgnd.legendHandles[3]._sizes = [200]
+    
+    ticks  = ax[0].get_xticks()
+    labels = [str(datetime.datetime.fromtimestamp(l)) for l in ticks]
+    labels = [l.split(' ',1)[1].rsplit(':',1)[0] for l in labels]
+    ax[0].set_xticklabels(labels)
+
+    dt = df_dbd.index[0].replace(microsecond=0)
+    plt.axis('equal')
+    plt.suptitle('DVL Odometry with Water Column Sensing', fontweight='bold')
+    ax[0].set_title('Dive Profile')
+    ax[1].set_title('Odometry in LMC')
+    plt.xlabel('X position [m]')
+    plt.ylabel('Y position [m]')
+    plt.subplots_adjust(wspace=0.3)
+    if save_name: plt.savefig('/Users/zduguid/Desktop/fig/%s' % save_name)
+    else:         plt.savefig('/Users/zduguid/Desktop/fig/tmp.png')
+
+
 ###############################################################################
 # PLOT PROFILE AND ODOMETRY AND DEAD-RECKONED AND THREE-FACTORS
 ###############################################################################
@@ -452,19 +573,12 @@ def plot_profile_and_odometry_and_dr_and_three_factors(ts_pd0, ts_dbd_all,
     roll_len = 20
     marker_size = 15
 
-    # factor_d = -ts_pd0.df.bathy_factor_depth.rolling(roll_len).median()
-    # factor_s =  ts_pd0.df.bathy_factor_slope.rolling(roll_len).median()
-    # factor_o =  ts_pd0.df.bathy_factor_orient.rolling(roll_len).median()
-
-    # TODO double check that these features are added to the data-frame
     factor_d = -ts_pd0.df.pc_bathy_depth
     factor_s =  ts_pd0.df.pc_bathy_slope
     factor_o =  ts_pd0.df.pc_bathy_orient 
 
     sns.scatterplot(ts_pd0.df.time, factor_d, ax=ax0, s=marker_size, 
         linewidth=0, color='tab:blue', zorder=3)
-    sns.scatterplot(ts_pd0.df.time, -ts_pd0.df.depth, linewidth=0, ax=ax0,
-        s=int(marker_size/2), color='tab:orange', zorder=2)
     sns.scatterplot(ts_pd0.df.time, factor_s,  ax=ax1, s=marker_size, 
         linewidth=0, color='tab:purple')
     sns.scatterplot(ts_pd0.df.time, factor_o, ax=ax2, s=marker_size,
@@ -544,11 +658,21 @@ def plot_profile_and_odometry_and_dr_and_three_factors(ts_pd0, ts_dbd_all,
     nav_ylims    = []
 
     for i in range(len(nav_axs)):
-
+        sns.scatterplot(
+            ts_pd0.df.tan_pos_x,
+            ts_pd0.df.tan_pos_y,
+            color='tab:orange',
+            label='MF-TAN',
+            linewidth=0,
+            s=8,
+            data=ts_pd0.df,
+            ax=nav_axs[i],
+            zorder=2,
+        )
         sns.scatterplot(
             ts_pd0.df.rel_pos_x,
             ts_pd0.df.rel_pos_y,
-            color='tab:orange',
+            color='limegreen',
             label='DVL-Odo',
             linewidth=0,
             s=8,
@@ -572,6 +696,7 @@ def plot_profile_and_odometry_and_dr_and_three_factors(ts_pd0, ts_dbd_all,
             y=df_dbd.m_gps_y_lmc - dbd_origin_y_lmc,
             marker='X',
             color='tab:red', 
+            label='GPS Fix',
             s=200,
             data=df_dbd,
             ax=nav_axs[i],
@@ -595,11 +720,10 @@ def plot_profile_and_odometry_and_dr_and_three_factors(ts_pd0, ts_dbd_all,
 
     for i in range(len(nav_axs)):
         # TODO -- can add marker for when TAN is able to recognize a feature
-        lgnd = nav_axs[i].legend(frameon=True, framealpha=1,loc='lower right', 
+        lgnd = nav_axs[i].legend(frameon=True, framealpha=1,loc='lower left', 
             fontsize='small')
-        lgnd.legendHandles[0]._sizes = [60]
-        lgnd.legendHandles[1]._sizes = [60]
-        # lgnd.legendHandles[2]._sizes = [200]
+        for j in range(3):
+            lgnd.legendHandles[j]._sizes = [60]
         nav_axs[i].set_xlim(nav_xlims[i])
         nav_axs[i].set_ylim(nav_ylims[i])
         nav_axs[i].set_ylabel('Y Position [m]')

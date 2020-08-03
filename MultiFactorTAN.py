@@ -66,9 +66,10 @@ class PointCloud(object):
         self.GRID_RESOLUTION = 10
         self.MIN_DELTA_T     = 1
         self.MIN_SPATIAL_RES = 2*self.GRID_RESOLUTION
-        self.MIN_NUM_PINGS   = 24
-        # self.MIN_NUM_PINGS   = 12
-        # self.MIN_NUM_PINGS   = 6
+        # self.MIN_NUM_PINGS   = 24
+        self.MIN_NUM_PINGS   = 12        
+        # self.MIN_NUM_PINGS   = 8
+        # self.MIN_NUM_PINGS   = 6 
         self.MIN_PITCH       = 10
         self.MIN_OFFSET      = 2
         self.RAD_TO_DEG      = 180/np.pi 
