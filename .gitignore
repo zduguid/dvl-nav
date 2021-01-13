@@ -1,9 +1,0 @@
-# files
-*.pyc
-.nbgrader.log
-
-# folders
-.ipynb_checkpoints/
-__pycache__/
-pd0-parsed/
-pd0-raw/

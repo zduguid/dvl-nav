@@ -9,7 +9,8 @@ import numpy as np
 import utm
 import pandas as pd
 import seaborn as sns
-import earthpy.plot as ep
+#should be able to delete
+#import earthpy.plot as ep
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import BathymetryMap
@@ -243,7 +244,7 @@ def plot_odometry_and_dr(ts_pd0, ts_dbd_all, glider, save_name=None):
     dt = df_dbd.index[0].replace(microsecond=0)
     plt.axis('equal')
     plt.suptitle('DVL Odometry', fontweight='bold')
-    plt.title('%s Kolumbo Volcano %s' % (unit_name[glider], dt.isoformat(),))
+    #plt.title('%s Kolumbo Volcano %s' % (unit_name[glider], dt.isoformat(),))
     plt.xlabel('x position [m]')
     plt.ylabel('y position [m]')
     if save_name: plt.savefig(save_name)
@@ -734,9 +735,9 @@ def plot_profile_and_odometry_and_dr_and_three_factors(ts_pd0, ts_dbd_all,
     # plt.suptitle('Multi-Factor Terrain-Aided Navigation', fontweight='bold')
     plt.suptitle('Bathymetric Factor Extraction for MF-TAN',fontweight='bold')
     plt.subplots_adjust(wspace=0.3)
-    if save_name: plt.savefig('/Users/zduguid/Desktop/fig/%s' % save_name)
-    else:         plt.savefig('/Users/zduguid/Desktop/fig/tmp.png')
-    plt.close()
+    #if save_name: plt.savefig('/Users/zduguid/Desktop/fig/%s' % save_name)
+    #else:         plt.savefig('/Users/zduguid/Desktop/fig/tmp.png')
+    #plt.close()
 
 
 

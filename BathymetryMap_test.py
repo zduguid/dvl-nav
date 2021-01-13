@@ -1,4 +1,4 @@
-# BathymetryMap.py
+# BathymetryMap_test.py
 #
 # Class for parsing and querying bathymetric data  
 #   2020-07-10  zduguid@mit.edu         initial implementation
@@ -7,7 +7,7 @@
 import seaborn as sns 
 import numpy as np
 import datetime
-import rasterio as rio
+#import rasterio as rio
 import importlib
 #should be able to delete
 #import earthpy as et
@@ -290,25 +290,26 @@ class BathymetryMap(object):
         ax.set_yticks(yticks)
         ax.set_yticklabels(ylabels)
 
-
-    def make_surface_plot(self, ax, bathy_array, bathy_variable, bathy_cmap, 
-        add_xlabel=True, add_ylabel=True):
-        """TODO
-        """
-        sns.set(font_scale = 1.5)
-        ep.plot_bands(
-            bathy_array, 
-            cmap=bathy_cmap,
-            title=bathy_variable,
-            ax=ax,
-            scale=False
-        )
-        plt.suptitle(self.name, fontweight='bold')
-        if add_xlabel:
-            ax.set_xlabel(self.xlabel)
-        if add_ylabel:
-            ax.set_ylabel(self.ylabel)
-        self.set_ticks_and_tick_labels(ax)
+# currently uses the earthpy module 
+#ep.plot_bands()
+    # def make_surface_plot(self, ax, bathy_array, bathy_variable, bathy_cmap, 
+    #     add_xlabel=True, add_ylabel=True):
+    #     """TODO
+    #     """
+    #     sns.set(font_scale = 1.5)
+    #     ep.plot_bands(
+    #         bathy_array, 
+    #         cmap=bathy_cmap,
+    #         title=bathy_variable,
+    #         ax=ax,
+    #         scale=False
+    #     )
+    #     plt.suptitle(self.name, fontweight='bold')
+    #     if add_xlabel:
+    #         ax.set_xlabel(self.xlabel)
+    #     if add_ylabel:
+    #         ax.set_ylabel(self.ylabel)
+    #     self.set_ticks_and_tick_labels(ax)
 
 
     def plot_depth_map(self, ax=None, add_xlabel=True, add_ylabel=True):
