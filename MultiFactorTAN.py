@@ -57,15 +57,17 @@ class BottomTrackPoint(object):
 
 # collect set of bottom track point
 class PointCloud(object):
-    def __init__(self):
+    def __init__(self, GRID_RESOLUTION):
         """TODO
         
         x and y positions are given in Earth coordinate frame
         """
         # constants 
-        self.GRID_RESOLUTION = 10
+        self.GRID_RESOLUTION = GRID_RESOLUTION
+        # self.GRID_RESOLUTION = 10
         self.MIN_DELTA_T     = 1
-        self.MIN_SPATIAL_RES = 2*self.GRID_RESOLUTION
+        # self.MIN_SPATIAL_RES = 0.5*self.GRID_RESOLUTION
+        self.MIN_SPATIAL_RES = 0.5*GRID_RESOLUTION
         # self.MIN_NUM_PINGS   = 24
         self.MIN_NUM_PINGS   = 12        
         # self.MIN_NUM_PINGS   = 8

@@ -88,7 +88,7 @@ ts_flight_kolumbo_all = SlocumFlightController.SlocumFlightController.from_direc
 meta_dict = bathy_meta_data.BathyData["Kolumbo"]
 bathy     = BathymetryMap.BathymetryMap(meta_dict=meta_dict)
 bathy.parse_bathy_file()
-bathy_df = pd.read_csv('C:/Users/grego/Dropbox/Kolumbo cruise 2019/zduguid/bathy/Kolumbo-10m-utm.csv')
+bathy_df = pd.read_csv('C:/Users/grego/Dropbox/Kolumbo cruise 2019/zduguid/bathy/Kolumbo-10m-utm-sub.csv')
 
 #%% DVL Data
 glider = "sentinel"
