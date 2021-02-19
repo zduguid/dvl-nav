@@ -18,8 +18,10 @@ class AVC(object):
 
         # constants to define limits of propulsive thruster
         self.V_MIN  = 0.0
-        self.V_MAX  = 1.5
-        self.V_RES  = 61 
+        self.V_MAX  = 1.0
+        # self.V_RES  = 61 
+        self.V_RES  = 121
+        self.V_RES  = 500
         self.V_LIST = np.linspace(self.V_MIN, self.V_MAX, self.V_RES)
 
         # minimum and maximum pitch values in [deg]
@@ -158,9 +160,9 @@ class AVC(object):
         vtw_total = vtw_prop + vtw_buoy
         
         # compute energy expended from all sources of power draw
-        p_prop  = self.get_prop_power(vtw_prop)  
+        p_thr   = self.get_thruster_power(vtw_prop)
         p_buoy  = self.get_buoy_power(vtw_total, pitch, z_dive, z_climb)
-        p_total = p_prop + p_buoy + p_hotel
+        p_total = p_thr + p_buoy + p_hotel
         return(p_total/vog)
 
 
@@ -247,8 +249,8 @@ class AVC(object):
 
             # computer power draw with optimal propulsive power
             #   + note that ballast pump cost already to energy consumption
-            p_prop    = self.get_prop_power(vtw_prop)
-            p_total   = p_prop + p_hotel
+            p_thr   = self.get_thruster_power(vtw_prop)
+            p_total = p_thr + p_hotel
 
             # add energy consumption and distance traveled to the summation 
             delta_time      = voc_interval_len/vtw_ver  # [s]
@@ -261,8 +263,11 @@ class AVC(object):
         return(delta_energy/delta_distance)
 
 
-    def get_prop_power(self, vtw_prop):
+    def get_prop_power_new_model(self, vtw_prop):
         """Determines propulsive power needed to achieve propulsive speed
+        
+        New thruster model, based on preliminary data.
+        Source: Brian Claus, June 2020.
         """
         vtw_prop = max(min(vtw_prop, self.V_MAX), self.V_MIN)
         c3 =  3.7856
@@ -272,11 +277,40 @@ class AVC(object):
         return(c3*vtw_prop**3 + c2*vtw_prop**2 + c1*vtw_prop + c0)
 
 
+    def get_prop_power(self, vtw_prop):
+        """Determines propulsive power needed to achieve propulsive speed
+
+        Documented in Master Data file of the Slocum Glider manual.
+        """
+        vtw_prop = max(min(vtw_prop, self.V_MAX), self.V_MIN)
+        c1 = 0.450 
+        c2 = 0.385
+        return((vtw_prop/c1)**(1/c2))
+
+
+    def get_controller_power(self, prop_power):
+        """Determines motor controller loss as a function of input prop power
+        """
+        c1 = 0.10 
+        c0 = 0.32
+        return(prop_power*c1 + c0)
+
+
+    def get_thruster_power(self, vtw_prop):
+        """Determine total thruster power as sum of propeller power and 
+        controller power
+        """
+        p_prop = self.get_prop_power(vtw_prop)
+        p_controller = self.get_controller_power(p_prop)
+        return(p_prop + p_controller)
+
+
     def get_buoy_power(self, vtw_total, pitch, z_dive, z_climb):
         """Determine the average power over the course of an inflection cycle
         """
         if pitch == 0:     return(0)
-        if vtw_total <= 0: return(np.nan)
+        if vtw_total <= 0: return(np.nan) # TODO
+        # if vtw_total <= 0: return(0)
         vtw_vertical = vtw_total*np.sin(pitch*self.DEG_TO_RAD)
         delta_depth_inflection = z_dive - z_climb
         delta_time_inflection  = 2*delta_depth_inflection/vtw_vertical

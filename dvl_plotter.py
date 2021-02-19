@@ -311,7 +311,8 @@ def plot_profile_and_odometry(ts, glider, save_name=None):
 ###############################################################################
 # PLOT PROFILE AND ODOMETRY AND DEAD-RECKONED
 ###############################################################################
-def plot_profile_and_odometry_and_dr(ts_pd0, ts_dbd_all, save_name=None):
+def plot_profile_and_odometry_and_dr(ts_pd0, ts_dbd_all, save_name=None, 
+    bathy_list=None):
     sns.set(font_scale = 1.5)
     fig, ax = plt.subplots(1,2, figsize=(15,8))
 
@@ -344,7 +345,7 @@ def plot_profile_and_odometry_and_dr(ts_pd0, ts_dbd_all, save_name=None):
     ax[0].set_ylabel('Depth [m]')
     ax[0].set_xlabel('Time')
     ax[0].set_title('Dive Profile')
-    ax[0].legend(['Depth [m]', 'Altitude [m]'], loc='best',
+    ax[0].legend(['Glider Depth [m]', 'Seafloor Depth [m]'], loc='best',
         frameon=True, framealpha=0.6, fontsize='small')
 
     #############################################
@@ -392,10 +393,34 @@ def plot_profile_and_odometry_and_dr(ts_pd0, ts_dbd_all, save_name=None):
         color='tab:red', 
         label='GPS Fix',
         s=200,
-        data=df_dbd,
+        data=df_dbd, 
         ax=ax[1],
         zorder=5,
     )
+    ax[1].axis('equal')
+    xlim=ax[1].get_xlim()
+    ylim=ax[1].get_ylim()
+
+    if bathy_list:
+        bathy_df  = bathy_list[0]
+        bathy_bg  = bathy_list[1]
+        dbd_utm_x = bathy_list[2]        
+        dbd_utm_y = bathy_list[3]
+        sns.scatterplot(
+            bathy_df.utm_x_list - dbd_utm_x,
+            bathy_df.utm_y_list - dbd_utm_y,
+            bathy_bg,
+            marker='s',
+            ax=ax[1],
+            s=80,
+            palette="gray_r",
+            linewidth=0,
+            zorder=0,
+            legend=False,
+        )
+
+    ax[1].set_xlim(xlim)
+    ax[1].set_ylim(ylim)
 
     # TODO -- can add marker for when TAN is able to recognize a feature
     lgnd = ax[1].legend(frameon=True, framealpha=0.6, loc='best', 
@@ -406,7 +431,7 @@ def plot_profile_and_odometry_and_dr(ts_pd0, ts_dbd_all, save_name=None):
     if len(lgnd.legendHandles) == 4:
         lgnd.legendHandles[3]._sizes = [100]
     dt = df_dbd.index[0].replace(microsecond=0)
-    plt.axis('equal')
+    # plt.axis('equal')
     plt.suptitle('DVL Odometry with Water Column Sensing', fontweight='bold')
     plt.title('Odometry in LMC')
     plt.xlabel('X position [m]')
@@ -414,6 +439,8 @@ def plot_profile_and_odometry_and_dr(ts_pd0, ts_dbd_all, save_name=None):
     plt.subplots_adjust(wspace=0.3)
     if save_name: plt.savefig('/Users/zduguid/Desktop/fig/%s' % save_name)
     else:         plt.savefig('/Users/zduguid/Desktop/fig/tmp.png')
+    if bathy_list:
+        plt.close()
 
 
 

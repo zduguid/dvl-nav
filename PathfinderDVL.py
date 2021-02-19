@@ -254,7 +254,7 @@ class PathfinderDVL(object):
         #   - the values are converted to standard metric units after unpacking
         #   - DO NOT edit these variables 
         self._bottom_track = (
-            ('id',                              '<H',    0),
+            ('id',                                  '<H',    0),
             ('btm_pings_per_ensemble',              '<H',    2),        
             ('btm_min_correlation_mag',             'B',     6),
             ('btm_min_echo_intensity_amp',          'B',     7),
